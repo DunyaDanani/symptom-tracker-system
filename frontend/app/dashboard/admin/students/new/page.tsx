@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { GRADE_TAXONOMY, getCategory } from "@/lib/gradeTaxonomy";
 
 interface Teacher {
   _id: string;
@@ -43,6 +44,7 @@ export default function AdmitStudentPage() {
     lastName: "",
     dateOfBirth: "",
     gender: "",
+    categorySlug: "",
     grade: "",
     section: "",
     diagnosis: "",
@@ -194,6 +196,7 @@ export default function AdmitStudentPage() {
       lastName: "",
       dateOfBirth: "",
       gender: "",
+      categorySlug: "",
       grade: "",
       section: "",
       diagnosis: "",
@@ -389,13 +392,39 @@ export default function AdmitStudentPage() {
                     <option value="other">Other</option>
                   </select>
                 </Field>
-                <Field label="Select grade">
-                  <input
+                <Field label="Education Stage">
+                  <select
                     className="input"
-                    placeholder="e.g. Grade 3"
+                    value={form.categorySlug}
+                    onChange={(e) => {
+                      const categorySlug = e.target.value;
+                      setForm((prev) => ({ ...prev, categorySlug, grade: "" }));
+                    }}
+                  >
+                    <option value="">Select</option>
+                    {GRADE_TAXONOMY.map((c) => (
+                      <option key={c.slug} value={c.slug}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Grade / Class">
+                  <select
+                    className="input"
                     value={form.grade}
+                    disabled={!form.categorySlug}
                     onChange={(e) => updateField("grade", e.target.value)}
-                  />
+                  >
+                    <option value="">
+                      {form.categorySlug ? "Select" : "Choose education stage first"}
+                    </option>
+                    {getCategory(form.categorySlug)?.grades.map((g) => (
+                      <option key={g.slug} value={g.label}>
+                        {g.label}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
                 <Field label="Section">
                   <input

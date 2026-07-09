@@ -46,6 +46,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+    // Recovery email for staff accounts (admin, principal, shadow_teacher).
+    // Parent/child accounts don't use this — their recovery routes through
+    // Student.parentEmail instead, since a child has no email of their own.
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: null,
+    },
+
+    // Forgot-password flow: a hashed 6-digit code + its expiry, cleared
+    // again once used.
+    resetCode: {
+      type: String,
+      default: null,
+    },
+    resetCodeExpires: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

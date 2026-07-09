@@ -3,21 +3,21 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
+import {
+  GRADE_TAXONOMY,
+  UNGROUPED_CATEGORY,
+  categoryForGrade,
+} from "@/lib/gradeTaxonomy";
 
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
-  grade: string;
-  section?: string;
   branch: string;
-  flagged?: boolean;
-  assignedTeacher?: { name: string } | null;
+  grade: string;
 }
 
 const API_BASE = "http://localhost:5000/api";
 
-export default function AdminBranchStudentsPage({
+export default function AdminBranchCategoriesPage({
   params,
 }: {
   params: Promise<{ branchName: string }>;
@@ -55,6 +55,14 @@ export default function AdminBranchStudentsPage({
     load();
   }, [branch]);
 
+  const countForCategory = (categorySlug: string) =>
+    students.filter((s) => categoryForGrade(s.grade)?.slug === categorySlug)
+      .length;
+
+  const ungroupedCount = students.filter(
+    (s) => !categoryForGrade(s.grade)
+  ).length;
+
   return (
     <DashboardLayout>
       <Link
@@ -75,68 +83,53 @@ export default function AdminBranchStudentsPage({
         <p className="text-gray-400 text-sm">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
-      ) : students.length === 0 ? (
-        <div className="bg-white rounded-md shadow-sm p-6 text-sm text-gray-400">
-          No students at this branch yet.
-        </div>
       ) : (
-        <div className="bg-white rounded-md shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left">
-                <th className="px-6 py-3 font-semibold text-gray-700">
-                  Name
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-700">
-                  Grade
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-700">
-                  Shadow Teacher
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-700">
-                  Status
-                </th>
-                <th className="px-6 py-3 font-semibold text-gray-700">
-                  History
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.map((s) => (
-                <tr key={s._id} className="border-b border-gray-50">
-                  <td className="px-6 py-3">
-                    {s.firstName} {s.lastName}
-                  </td>
-                  <td className="px-6 py-3">
-                    {s.grade}
-                    {s.section ? ` · ${s.section}` : ""}
-                  </td>
-                  <td className="px-6 py-3">
-                    {s.assignedTeacher?.name || "Unassigned"}
-                  </td>
-                  <td className="px-6 py-3">
-                    {s.flagged ? (
-                      <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                        Flagged
-                      </span>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-3">
-                    <Link
-                      href={`/dashboard/admin/students/${s._id}/history`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {GRADE_TAXONOMY.map((category) => (
+            <Link
+              key={category.slug}
+              href={`/dashboard/admin/students/branch/${encodeURIComponent(
+                branch
+              )}/${category.slug}`}
+              className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow"
+            >
+              <FolderIcon className="w-12 h-12 text-amber-400" />
+              <p className="text-sm font-semibold text-gray-800 text-center">
+                {category.label}
+              </p>
+              <p className="text-xs text-gray-400">
+                {countForCategory(category.slug)} student
+                {countForCategory(category.slug) === 1 ? "" : "s"}
+              </p>
+            </Link>
+          ))}
+
+          {ungroupedCount > 0 && (
+            <Link
+              href={`/dashboard/admin/students/branch/${encodeURIComponent(
+                branch
+              )}/${UNGROUPED_CATEGORY.slug}`}
+              className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow"
+            >
+              <FolderIcon className="w-12 h-12 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-800 text-center">
+                {UNGROUPED_CATEGORY.label}
+              </p>
+              <p className="text-xs text-gray-400">
+                {ungroupedCount} student{ungroupedCount === 1 ? "" : "s"}
+              </p>
+            </Link>
+          )}
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+    </svg>
   );
 }
