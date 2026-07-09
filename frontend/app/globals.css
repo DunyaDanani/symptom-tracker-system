@@ -1,0 +1,74 @@
+@import "tailwindcss";
+/* Full background */
+.container {
+  height: 100vh;
+  background: url('/oki_bg3.jpg') no-repeat center/cover;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Card */
+.card {
+  width: 700px;
+  background: hwb(0 100% 0%);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0px 10px 30px rgba(0,0,0,0.2);
+}
+
+/* Top bar */
+
+.topBar {
+  height: 60px;
+  background: #6f8fb5;
+  
+  position: relative;
+}
+
+/* Logo circle */
+.logoCircle img {
+  position: absolute;
+  left: 50%;
+  top: 35%;
+  transform: translate(-50%, -50%); /* centers perfectly */
+  object-fit: contain;
+  border-radius: 70%;
+  width: 100px;
+  height: 100px;
+}
+
+/* Content split */
+.content {
+  display: flex;
+}
+
+/* Left side */
+.left {
+  width: 50%;
+  padding: 40px;
+  text-align: center;
+}
+
+/* Right side */
+.right {
+  width: 50%;
+  padding: 40px;
+}
+
+/* Inputs */
+.right input {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+}
+
+/* Button */
+.right button {
+  width: 100%;
+  padding: 10px;
+  background: green;
+  color: white;
+  border: none;
+  margin-top: 10px;
+}
