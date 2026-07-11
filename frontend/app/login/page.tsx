@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { API_BASE } from "@/lib/config";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:5000/api/auth/login', {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,6 +51,9 @@ export default function LoginPage() {
 
       switch (data.role) {
         case 'admin':
+        case 'cao':
+          // CAO has identical permissions to admin, so it reuses the same
+          // dashboard rather than needing its own.
           router.push('/dashboard/admin');
           break;
 
@@ -58,6 +62,7 @@ export default function LoginPage() {
           break;
 
         case 'shadow_teacher':
+        case 'class_teacher':
           router.push('/dashboard/teacher');
           break;
 
@@ -100,16 +105,16 @@ export default function LoginPage() {
         <div className="relative bg-white rounded-md shadow-2xl overflow-visible">
 
           {/* Header */}
-          <div className="h-24 bg-gradient-to-r from-sky-500 to-blue-600 rounded-t-md" />
+          <div className="h-16 bg-gradient-to-r from-sky-500 to-blue-600 rounded-t-md" />
 
           {/* Logo */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-10">
-            <div className="w-28 h-28 rounded-full bg-white shadow-lg flex items-center justify-center overflow-hidden border border-gray-100">
+          <div className="absolute left-1/2 -translate-x-1/2 -top-8">
+            <div className="w-32 h-32 rounded-full bg-white shadow-lg flex items-center justify-center overflow-hidden border border-gray-100">
               <Image
                 src="/12.jpg"
                 alt="OKI International School Logo"
-                width={90}
-                height={90}
+                width={104}
+                height={104}
                 priority
                 className="object-contain"
               />
@@ -208,22 +213,15 @@ export default function LoginPage() {
                   {loading ? 'SIGNING IN...' : 'SIGN IN'}
                 </button>
 
-                <p className="text-center text-sm text-gray-500 pt-1">
-                  Forgot{' '}
-                  <a
-                    href="/forgot-password"
-                    className="text-blue-500 hover:underline"
-                  >
-                    Password
-                  </a>{' '}
-                  or{' '}
-                  <a
-                    href="/forgot-username"
-                    className="text-blue-500 hover:underline"
-                  >
-                    Username
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <a href="/forgot-username" className="hover:text-blue-600 hover:underline">
+                    Forgot username?
                   </a>
-                </p>
+                  <span className="text-gray-300">|</span>
+                  <a href="/forgot-password" className="hover:text-blue-600 hover:underline">
+                    Forgot password?
+                  </a>
+                </div>
 
               </form>
 
@@ -241,3 +239,4 @@ export default function LoginPage() {
     </div>
   );
 }
+ 

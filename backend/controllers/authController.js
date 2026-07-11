@@ -33,14 +33,14 @@ const resolveRecoveryEmail = async (user) => {
 // inbox + notification bell) and emails ADMIN_EMAIL if configured.
 const notifyAdminOfRecoveryEvent = async ({ requestingUser, message }) => {
   try {
-    const admins = await User.find({ role: "admin" });
+    const admins = await User.find({ role: { $in: ["admin", "cao"] } });
     await Promise.all(
       admins.map((admin) =>
         Message.create({
           sender: requestingUser._id,
           senderRole: requestingUser.role,
           recipient: admin._id,
-          recipientRole: "admin",
+          recipientRole: admin.role,
           category: "Account Recovery",
           body: message,
         })
@@ -97,6 +97,78 @@ export const login = async (req, res) => {
   } catch (error) {
     console.error(error);
 
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   POST /api/auth/view-as-child
+// @access  Parent only
+// Lets a parent, from inside their own authenticated session, switch into
+// their child's dashboard without the child needing to know or enter any
+// credentials of their own. Issues a fresh token for the linked child
+// account. The child's own independent login (and its parent-mediated
+// forgot-username/forgot-password flow) is unaffected — this is purely an
+// additive convenience for parents.
+export const viewAsChild = async (req, res) => {
+  try {
+    const student = await Student.findOne({ parentUser: req.user.id }).populate(
+      "studentUser"
+    );
+
+    if (!student || !student.studentUser) {
+      return res.status(404).json({
+        success: false,
+        message: "No child account is linked to your profile yet.",
+      });
+    }
+
+    const childUser = student.studentUser;
+
+    const token = jwt.sign(
+      { id: childUser._id, role: childUser.role, branch: childUser.branch },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      role: childUser.role,
+      name: childUser.name,
+      branch: childUser.branch,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// @route   GET /api/auth/me
+// @access  Any authenticated user
+// Returns the logged-in user's own account details — powers the header
+// user menu and the per-role account/profile pages.
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select(
+      "name username role branch email createdAt"
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Server Error",
@@ -342,6 +414,98 @@ export const changePassword = async (req, res) => {
     });
 
     res.json({ success: true, message: "Password updated" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// @route   POST /api/auth/change-username
+// @access  Any authenticated user — lets a student/parent/teacher (or
+// anyone) swap their auto-generated username for one they'll actually
+// remember, once they're logged in.
+// Body: { newUsername }
+export const changeUsername = async (req, res) => {
+  const { newUsername } = req.body;
+
+  try {
+    const trimmed = (newUsername || "").trim();
+    if (!trimmed) {
+      return res.status(400).json({ success: false, message: "New username is required" });
+    }
+
+    const existing = await User.findOne({ username: trimmed });
+    if (existing && existing._id.toString() !== req.user.id) {
+      return res.status(400).json({ success: false, message: "That username is already taken" });
+    }
+
+    const user = await User.findById(req.user.id);
+    const oldUsername = user.username;
+    user.username = trimmed;
+    await user.save();
+
+    await notifyAdminOfRecoveryEvent({
+      requestingUser: user,
+      message: `${user.role} "${oldUsername}" changed their username to "${trimmed}".`,
+    });
+
+    res.json({ success: true, message: "Username updated", username: user.username });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// @route   POST /api/auth/change-email
+// @access  Staff only (admin, principal, shadow_teacher, class_teacher) —
+// parent/child accounts have no email of their own; they recover through
+// Student.parentEmail instead (see resolveRecoveryEmail above), so
+// changing it here wouldn't do anything for them.
+// Body: { email }
+export const changeEmail = async (req, res) => {
+  const { email } = req.body;
+
+  const STAFF_ROLES = ["admin", "cao", "principal", "shadow_teacher", "class_teacher"];
+  if (!STAFF_ROLES.includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: "This account type doesn't use a recovery email",
+    });
+  }
+
+  try {
+    const trimmed = (email || "").trim().toLowerCase();
+    if (!trimmed) {
+      return res.status(400).json({ success: false, message: "Email is required" });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address",
+      });
+    }
+
+    const existing = await User.findOne({ email: trimmed });
+    if (existing && existing._id.toString() !== req.user.id) {
+      return res.status(400).json({
+        success: false,
+        message: "That email is already linked to another account",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    const hadEmailBefore = Boolean(user.email);
+    user.email = trimmed;
+    await user.save();
+
+    await notifyAdminOfRecoveryEvent({
+      requestingUser: user,
+      message: `${user.role} "${user.username}" ${
+        hadEmailBefore ? "updated" : "added"
+      } their recovery email.`,
+    });
+
+    res.json({ success: true, message: "Recovery email saved", email: user.email });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server Error" });

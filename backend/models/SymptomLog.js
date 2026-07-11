@@ -35,6 +35,24 @@ const symptomLogSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+    // Client meeting 20 Feb 2026: medication details must be recorded
+    // within the symptom tracker module alongside the symptom checkboxes.
+    medications: {
+      type: [
+        {
+          name: { type: String, trim: true, required: true },
+          dosage: { type: String, trim: true },
+          time: { type: String, trim: true }, // free text, e.g. "After lunch"
+        },
+      ],
+      default: [],
+    },
+
+    medicationNotes: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true, // createdAt doubles as the Date/Time shown in Symptom History

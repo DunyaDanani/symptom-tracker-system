@@ -1,14 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import ParentDashboardLayout from "@/components/ParentDashboardLayout";
-import PinGate from "@/components/PinGate";
+import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
+import SecureContentGate from "@/components/SecureContentGate";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
+
+interface MedicationEntry {
+  name: string;
+  dosage?: string;
+  time?: string;
+}
 
 interface SymptomLogEntry {
   _id: string;
   symptoms: string[];
   additionalNotes?: string;
+  medications?: MedicationEntry[];
+  medicationNotes?: string;
   createdAt: string;
 }
 
@@ -23,7 +32,7 @@ function SymptomHistoryContent() {
       const token = localStorage.getItem("token");
       try {
         const childRes = await fetch(
-          "http://localhost:5000/api/students/child",
+          `${API_BASE}/students/child`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const childData = await childRes.json();
@@ -34,7 +43,7 @@ function SymptomHistoryContent() {
         setChildId(childData.student._id);
 
         const historyRes = await fetch(
-          `http://localhost:5000/api/students/${childData.student._id}/history`,
+          `${API_BASE}/students/${childData.student._id}/history`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const historyData = await historyRes.json();
@@ -69,12 +78,13 @@ function SymptomHistoryContent() {
           <tr className="border-b border-gray-100 text-left">
             <th className="px-4 py-3 font-semibold text-gray-700">Date</th>
             <th className="px-4 py-3 font-semibold text-gray-700">Symptoms</th>
+            <th className="px-4 py-3 font-semibold text-gray-700">Medication</th>
           </tr>
         </thead>
         <tbody>
           {logs.length === 0 ? (
             <tr>
-              <td colSpan={2} className="px-4 py-4 text-gray-400">
+              <td colSpan={3} className="px-4 py-4 text-gray-400">
                 No symptom logs yet.
               </td>
             </tr>
@@ -96,6 +106,26 @@ function SymptomHistoryContent() {
                     </p>
                   )}
                 </td>
+                <td className="px-4 py-3 text-gray-800 align-top">
+                  {log.medications && log.medications.length > 0 ? (
+                    <ul className="space-y-0.5">
+                      {log.medications.map((m, i) => (
+                        <li key={i} className="text-xs">
+                          💊 {m.name}
+                          {m.dosage ? ` (${m.dosage})` : ""}
+                          {m.time ? ` — ${m.time}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                  {log.medicationNotes && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {log.medicationNotes}
+                    </p>
+                  )}
+                </td>
               </tr>
             ))
           )}
@@ -107,21 +137,17 @@ function SymptomHistoryContent() {
 
 export default function ParentSymptomHistoryPage() {
   return (
-    <ParentDashboardLayout>
-      <Link
-        href="/dashboard/parent"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Dashboard
-      </Link>
+    <FamilyDashboardLayout role="parent">
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Symptom History
       </h1>
 
-      <PinGate>
+      <SecureContentGate subject="Symptom History">
         <SymptomHistoryContent />
-      </PinGate>
-    </ParentDashboardLayout>
+      </SecureContentGate>
+    </FamilyDashboardLayout>
   );
 }
+               

@@ -8,8 +8,10 @@ import {
   getInbox,
   getSentMessages,
   getUnreadCount,
+  downloadAttachment,
 } from "../controllers/messageController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { documentFileFilter, runUpload } from "../utils/uploadFileFilter.js";
 
 const router = express.Router();
 
@@ -20,7 +22,11 @@ const storage = multer.diskStorage({
     cb(null, `${unique}${path.extname(file.originalname)}`);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: documentFileFilter,
+});
 
 router.use(protect);
 
@@ -29,6 +35,7 @@ router.get("/recipients", getRecipients);
 router.get("/inbox", getInbox);
 router.get("/sent", getSentMessages);
 router.get("/unread-count", getUnreadCount);
-router.post("/", upload.single("attachment"), sendMessage);
+router.get("/:id/attachment", downloadAttachment);
+router.post("/", runUpload(upload.single("attachment")), sendMessage);
 
 export default router;

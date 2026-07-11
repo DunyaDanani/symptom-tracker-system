@@ -3,10 +3,13 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
 import { getCategory, getGrade } from "@/lib/gradeTaxonomy";
 
+import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
+  admissionNumber?: string;
   firstName: string;
   lastName: string;
   grade: string;
@@ -15,8 +18,6 @@ interface Student {
   flagged?: boolean;
   assignedTeacher?: { name: string } | null;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function AdminBranchGradePage({
   params,
@@ -70,14 +71,7 @@ export default function AdminBranchGradePage({
 
   return (
     <DashboardLayout>
-      <Link
-        href={`/dashboard/admin/students/branch/${encodeURIComponent(
-          branch
-        )}/${categorySlug}`}
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to {category.label}
-      </Link>
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         {grade.label} — {branch}
@@ -100,6 +94,9 @@ export default function AdminBranchGradePage({
             <thead>
               <tr className="border-b border-gray-100 text-left">
                 <th className="px-6 py-3 font-semibold text-gray-700">
+                  Admission No.
+                </th>
+                <th className="px-6 py-3 font-semibold text-gray-700">
                   Name
                 </th>
                 <th className="px-6 py-3 font-semibold text-gray-700">
@@ -119,6 +116,9 @@ export default function AdminBranchGradePage({
             <tbody>
               {students.map((s) => (
                 <tr key={s._id} className="border-b border-gray-50">
+                  <td className="px-6 py-3 text-gray-500">
+                    {s.admissionNumber || "—"}
+                  </td>
                   <td className="px-6 py-3">
                     {s.firstName} {s.lastName}
                   </td>

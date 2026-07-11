@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import ParentDashboardLayout from "@/components/ParentDashboardLayout";
-import PinGate from "@/components/PinGate";
+import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
+import SecureContentGate from "@/components/SecureContentGate";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
 
 interface EmotionCheckinEntry {
   _id: string;
@@ -80,7 +81,7 @@ function EmotionHistoryContent() {
       const token = localStorage.getItem("token");
       try {
         const childRes = await fetch(
-          "http://localhost:5000/api/students/child",
+          `${API_BASE}/students/child`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const childData = await childRes.json();
@@ -90,7 +91,7 @@ function EmotionHistoryContent() {
         }
 
         const historyRes = await fetch(
-          `http://localhost:5000/api/students/${childData.student._id}/history`,
+          `${API_BASE}/students/${childData.student._id}/history`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const historyData = await historyRes.json();
@@ -210,21 +211,16 @@ function EmotionHistoryContent() {
 
 export default function ParentEmotionHistoryPage() {
   return (
-    <ParentDashboardLayout>
-      <Link
-        href="/dashboard/parent"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Dashboard
-      </Link>
+    <FamilyDashboardLayout role="parent">
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Emotion Tracker
       </h1>
 
-      <PinGate>
+      <SecureContentGate subject="Emotion History">
         <EmotionHistoryContent />
-      </PinGate>
-    </ParentDashboardLayout>
+      </SecureContentGate>
+    </FamilyDashboardLayout>
   );
 }

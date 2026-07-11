@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
+import UserMenu from "./UserMenu";
 
 interface PrincipalDashboardLayoutProps {
   children: ReactNode;
@@ -15,7 +16,6 @@ const navItems = [
   { label: "Notice", href: "/dashboard/principal/notice", icon: NoticeIcon },
   { label: "Messages", href: "/dashboard/principal/messages", icon: MessagesIcon },
   { label: "Student", href: "/dashboard/principal/students", icon: StudentIcon },
-  { label: "Child Profile", href: "/dashboard/principal/profile", icon: ProfileIcon },
 ];
 
 export default function PrincipalDashboardLayout({
@@ -25,6 +25,7 @@ export default function PrincipalDashboardLayout({
   const router = useRouter();
   const [userName, setUserName] = useState<string>("User");
   const [branch, setBranch] = useState<string>("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     // localStorage is only available client-side, so this can't be read
@@ -48,6 +49,7 @@ export default function PrincipalDashboardLayout({
   return (
     <div className="min-h-screen bg-slate-100 flex">
       {/* Sidebar */}
+      {sidebarOpen && (
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col shrink-0">
         {/* Logo */}
         <div className="h-20 flex items-center gap-2 px-6 border-b border-gray-100">
@@ -116,13 +118,19 @@ export default function PrincipalDashboardLayout({
           })}
         </nav>
       </aside>
+      )}
 
       {/* Main column */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top navbar */}
         <header className="h-20 bg-blue-900 flex items-center justify-between gap-6 px-8 shrink-0">
           {/* Hamburger */}
-          <button className="text-white hover:opacity-80 transition-opacity">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+            className="text-white hover:opacity-80 transition-opacity"
+          >
             <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
@@ -142,35 +150,12 @@ export default function PrincipalDashboardLayout({
 
             <NotificationBell messagesHref="/dashboard/principal/messages" />
 
-            <div className="flex items-center gap-2 text-white text-sm">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
-                </svg>
-              </div>
-              User
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              title="Log out"
-              className="text-white hover:opacity-80 transition-opacity"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H8a1 1 0 110-2h6.586l-1.293-1.293a1 1 0 010-1.414z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
+            <UserMenu
+              name={userName}
+              accountHref="/dashboard/principal/account"
+              dashboardHref="/dashboard/principal"
+              onLogout={handleLogout}
+            />
           </div>
         </header>
 
@@ -214,18 +199,6 @@ function StudentIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
-    </svg>
-  );
-}
-
-function ProfileIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a2 2 0 100 4 2 2 0 000-4zm0 6a4 4 0 00-4 4 1 1 0 001 1h6a1 1 0 001-1 4 4 0 00-4-4z"
-        clipRule="evenodd"
-      />
     </svg>
   );
 }

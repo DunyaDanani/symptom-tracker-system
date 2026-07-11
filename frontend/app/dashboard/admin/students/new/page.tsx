@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
 import { GRADE_TAXONOMY, getCategory } from "@/lib/gradeTaxonomy";
+import { isValidEmail } from "@/lib/validation";
+import { API_BASE } from "@/lib/config";
 
 interface Teacher {
   _id: string;
@@ -17,8 +20,22 @@ interface Teacher {
 interface Credentials {
   student?: { username: string; password: string };
   parent?: { username: string; password: string };
-  teacher?: { username: string; password: string };
+  teacher?: { username: string; password: string; emailSent?: boolean };
 }
+
+const REQUIRED_LABELS: Record<string, string> = {
+  admissionNumber: "Admission Number",
+  firstName: "First Name",
+  lastName: "Last Name",
+  dateOfBirth: "Date of Birth",
+  gender: "Gender",
+  grade: "Grade / Class",
+  diagnosis: "Primary diagnosis",
+  parentFirstName: "Parent First Name",
+  parentRelationship: "Relationship",
+  parentEmail: "Parent Email",
+  parentPhone: "Parent Phone",
+};
 
 const steps = ["Student info", "Parent info", "Assign Teacher", "Review & confirm"];
 
@@ -29,6 +46,7 @@ export default function AdmitStudentPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials>({});
+  const [emailSent, setEmailSent] = useState(false);
 
   // Teacher list + search
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -40,6 +58,7 @@ export default function AdmitStudentPage() {
 
   const [form, setForm] = useState({
     branch: "",
+    admissionNumber: "",
     firstName: "",
     lastName: "",
     dateOfBirth: "",
@@ -62,6 +81,7 @@ export default function AdmitStudentPage() {
       qualification: "",
       specialization: "",
       experienceYears: "",
+      email: "",
     },
   });
 
@@ -77,7 +97,7 @@ export default function AdmitStudentPage() {
   const fetchBranches = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:5000/api/students/branches", {
+      const res = await fetch(`${API_BASE}/students/branches`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -93,7 +113,7 @@ export default function AdmitStudentPage() {
   const fetchTeachers = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:5000/api/students/teachers", {
+      const res = await fetch(`${API_BASE}/students/teachers`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -114,24 +134,82 @@ export default function AdmitStudentPage() {
     }));
   };
 
-  const goNext = () => setStep((s) => Math.min(s + 1, 4));
+  // Returns an error message if the given step is missing required fields,
+  // or "" if the step is complete. Keeps the wizard from letting someone
+  // click through to Review with blank name/grade/DOB etc.
+  const validateStep = (stepNum: number): string => {
+    if (stepNum === 1) {
+      const missing: string[] = [];
+      if (!form.admissionNumber.trim()) missing.push(REQUIRED_LABELS.admissionNumber);
+      if (!form.firstName.trim()) missing.push(REQUIRED_LABELS.firstName);
+      if (!form.lastName.trim()) missing.push(REQUIRED_LABELS.lastName);
+      if (!form.dateOfBirth) missing.push(REQUIRED_LABELS.dateOfBirth);
+      if (!form.gender) missing.push(REQUIRED_LABELS.gender);
+      if (!form.grade) missing.push(REQUIRED_LABELS.grade);
+      if (!form.diagnosis.trim()) missing.push(REQUIRED_LABELS.diagnosis);
+      if (missing.length > 0) {
+        return `Please fill in: ${missing.join(", ")}`;
+      }
+    }
+    if (stepNum === 2) {
+      const missing: string[] = [];
+      if (!form.parentFirstName.trim()) missing.push(REQUIRED_LABELS.parentFirstName);
+      if (!form.parentRelationship) missing.push(REQUIRED_LABELS.parentRelationship);
+      if (!form.parentEmail.trim()) missing.push(REQUIRED_LABELS.parentEmail);
+      if (!form.parentPhone.trim()) missing.push(REQUIRED_LABELS.parentPhone);
+      if (missing.length > 0) {
+        return `Please fill in: ${missing.join(", ")}`;
+      }
+      if (!isValidEmail(form.parentEmail)) {
+        return "Please enter a valid email address (e.g. name@example.com)";
+      }
+    }
+    return "";
+  };
+
+  const goNext = () => {
+    const validationError = validateStep(step);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError("");
+    setStep((s) => Math.min(s + 1, 4));
+  };
   const goBack = () => setStep((s) => Math.max(s - 1, 1));
 
   const handleSelectTeacher = (id: string) => {
     setForm((prev) => ({
       ...prev,
       assignedTeacherId: id,
-      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "" },
+      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     }));
   };
 
   const handleConfirm = async () => {
+    // Re-validate every step before the final submit — someone could have
+    // reached step 4 via Back/Next without ever tripping goNext's checks
+    // (e.g. browser back/forward), so don't rely solely on per-step gating.
+    const step1Error = validateStep(1);
+    if (step1Error) {
+      setError(step1Error);
+      setStep(1);
+      return;
+    }
+    const step2Error = validateStep(2);
+    if (step2Error) {
+      setError(step2Error);
+      setStep(2);
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     const token = localStorage.getItem("token");
 
     const payload: any = {
       branch: form.branch,
+      admissionNumber: form.admissionNumber,
       firstName: form.firstName,
       lastName: form.lastName,
       dateOfBirth: form.dateOfBirth,
@@ -159,11 +237,12 @@ export default function AdmitStudentPage() {
         experienceYears: form.newTeacher.experienceYears
           ? Number(form.newTeacher.experienceYears)
           : 0,
+        email: form.newTeacher.email.trim(),
       };
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/students", {
+      const res = await fetch(`${API_BASE}/students`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -175,12 +254,20 @@ export default function AdmitStudentPage() {
       const data = await res.json();
 
       if (!data.success) {
-        setError(data.message || "Failed to register student");
+        const message = data.message || "Failed to register student";
+        setError(message);
+        // If the backend rejected on a missing student-side field, jump
+        // back to step 1 so the person isn't left staring at step 4
+        // wondering what's wrong.
+        if (/missing required/i.test(message)) {
+          setStep(1);
+        }
         setSubmitting(false);
         return;
       }
 
       setCredentials(data.credentials);
+      setEmailSent(Boolean(data.emailSent));
       setSuccess(true);
     } catch (err) {
       setError("Unable to reach the server. Please try again.");
@@ -192,6 +279,7 @@ export default function AdmitStudentPage() {
   const resetForm = () => {
     setForm({
       branch: branches[0] || "",
+      admissionNumber: "",
       firstName: "",
       lastName: "",
       dateOfBirth: "",
@@ -208,9 +296,10 @@ export default function AdmitStudentPage() {
       parentPhone: "",
       homeCity: "",
       assignedTeacherId: "",
-      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "" },
+      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     });
     setCredentials({});
+    setEmailSent(false);
     setSuccess(false);
     setStep(1);
   };
@@ -233,16 +322,29 @@ export default function AdmitStudentPage() {
 
           <div className="bg-white rounded-md shadow-sm p-6">
             <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded p-4 mb-6">
-              {form.firstName} {form.lastName} has been admitted successfully.
-              Credentials sent to {form.parentEmail}
-              {selectedTeacher ? ` · shadow teacher ${selectedTeacher.name} assigned.` : "."}
+              {form.firstName} {form.lastName} has been admitted successfully.{" "}
+              {emailSent
+                ? `Credentials emailed to ${form.parentEmail}.`
+                : `Could not email credentials to ${form.parentEmail} — please share the credentials below with the parent directly.`}
+              {selectedTeacher ? ` Shadow teacher ${selectedTeacher.name} assigned.` : ""}
             </div>
+            {!emailSent && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded p-3 mb-6">
+                Email delivery failed or is not configured. The account was
+                still created — copy the credentials below and share them
+                with the parent yourself.
+              </div>
+            )}
 
             <h2 className="font-semibold text-gray-700 mb-4">
               Student profile created
             </h2>
 
             <div className="space-y-3 text-sm">
+              <CredentialRow
+                label="Admission Number"
+                value={form.admissionNumber}
+              />
               <CredentialRow
                 label="Student Username"
                 value={credentials.student?.username}
@@ -269,6 +371,22 @@ export default function AdmitStudentPage() {
                     label="New Teacher Password"
                     value={credentials.teacher.password}
                   />
+                  {form.newTeacher.email.trim() && (
+                    <div className="flex justify-between border-b border-gray-100 pb-2">
+                      <span className="text-gray-500">Teacher email</span>
+                      <span
+                        className={
+                          credentials.teacher.emailSent
+                            ? "text-green-600 font-medium"
+                            : "text-amber-600 font-medium"
+                        }
+                      >
+                        {credentials.teacher.emailSent
+                          ? "Sent"
+                          : "Not sent — share manually"}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex justify-between border-b border-gray-100 pb-2">
@@ -299,7 +417,8 @@ export default function AdmitStudentPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-3xl">
+      <BackButton />
+      <div className="max-w-3xl mt-2">
         <h1 className="text-xl font-semibold text-gray-800 mb-2">
           Admit new student
         </h1>
@@ -357,6 +476,14 @@ export default function AdmitStudentPage() {
                       </option>
                     ))}
                   </select>
+                </Field>
+                <Field label="Admission Number">
+                  <input
+                    className="input"
+                    placeholder="e.g. OKI2026045"
+                    value={form.admissionNumber}
+                    onChange={(e) => updateField("admissionNumber", e.target.value)}
+                  />
                 </Field>
                 <Field label="First Name">
                   <input
@@ -429,6 +556,7 @@ export default function AdmitStudentPage() {
                 <Field label="Section">
                   <input
                     className="input"
+                    placeholder="e.g. A"
                     value={form.section}
                     onChange={(e) => updateField("section", e.target.value)}
                   />
@@ -633,6 +761,17 @@ export default function AdmitStudentPage() {
                       }
                     />
                   </Field>
+                  <Field label="Email (optional)" className="col-span-2">
+                    <input
+                      type="email"
+                      className="input"
+                      placeholder="teacher@example.com"
+                      value={form.newTeacher.email}
+                      onChange={(e) =>
+                        updateNewTeacherField("email", e.target.value)
+                      }
+                    />
+                  </Field>
                 </div>
               )}
             </div>
@@ -644,8 +783,10 @@ export default function AdmitStudentPage() {
                 Student Summary
               </h2>
               <SummaryRow label="Branch" value={form.branch} />
+              <SummaryRow label="Admission Number" value={form.admissionNumber} />
               <SummaryRow label="Name" value={`${form.firstName} ${form.lastName}`} />
-              <SummaryRow label="Grade" value={`${form.grade} ${form.section}`} />
+              <SummaryRow label="Grade" value={form.grade} />
+              <SummaryRow label="Section" value={form.section} />
               <SummaryRow label="Diagnosis" value={form.diagnosis} />
               <SummaryRow label="Communication" value={form.communicationLevel} />
 
@@ -673,6 +814,10 @@ export default function AdmitStudentPage() {
                   <SummaryRow
                     label="Qualification"
                     value={form.newTeacher.qualification || "—"}
+                  />
+                  <SummaryRow
+                    label="Email"
+                    value={form.newTeacher.email || "—"}
                   />
                 </>
               ) : (

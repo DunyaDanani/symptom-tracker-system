@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
 
+import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
   branch: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function AdminBranchesPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -53,7 +53,8 @@ export default function AdminBranchesPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mb-8">Branches</h1>
+      <BackButton />
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">Branches</h1>
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>

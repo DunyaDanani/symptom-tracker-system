@@ -6,9 +6,12 @@ import {
   getBranches,
   getMyProfile,
   getMyChild,
+  getLinkedStudent,
   getMyTodayEmotionCheckin,
   submitChildEmotionCheckin,
+  getMyActivityPlan,
   getStudentHistory,
+  getBreakActivities,
   getStudentProfile,
   getSymptomTrends,
   adminSetStudentFlag,
@@ -19,6 +22,7 @@ import {
   adminCreateEmotionCheckin,
   adminUpdateEmotionCheckin,
   adminDeleteEmotionCheckin,
+  updateTeacherAccount,
 } from "../controllers/studentController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
@@ -32,6 +36,12 @@ router.get("/branches", protect, getBranches);
 // block below, otherwise they inherit the admin-only restriction.
 router.get("/me", protect, authorizeRoles("child"), getMyProfile);
 router.get("/child", protect, authorizeRoles("parent"), getMyChild);
+router.get(
+  "/linked",
+  protect,
+  authorizeRoles("parent", "child"),
+  getLinkedStudent
+);
 router.get(
   "/emotion-checkin/today",
   protect,
@@ -47,22 +57,42 @@ router.post(
   authorizeRoles("child"),
   submitChildEmotionCheckin
 );
+// FR-09/FR-12: today's personalised activity plan for the child dashboard.
+router.get(
+  "/activity-plan",
+  protect,
+  authorizeRoles("child"),
+  getMyActivityPlan
+);
 router.get(
   "/:studentId/history",
   protect,
-  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
   getStudentHistory
+);
+router.get(
+  "/:studentId/break-activities",
+  protect,
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
+  getBreakActivities
 );
 router.get(
   "/:studentId/profile",
   protect,
-  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
   getStudentProfile
 );
 router.get(
   "/:studentId/symptom-trends",
   protect,
-  authorizeRoles("child", "parent", "shadow_teacher", "admin", "principal"),
+  authorizeRoles(
+    "child",
+    "parent",
+    "shadow_teacher",
+    "class_teacher",
+    "admin",
+    "principal"
+  ),
   getSymptomTrends
 );
 
@@ -72,6 +102,7 @@ router.use(authorizeRoles("admin"));
 router.post("/", registerStudent);
 router.get("/", getAllStudents);
 router.get("/teachers", getAvailableTeachers);
+router.patch("/teachers/:id", updateTeacherAccount);
 router.patch("/:studentId/flag", adminSetStudentFlag);
 
 // Admin add/edit/delete access to symptom logs and emotion check-ins —

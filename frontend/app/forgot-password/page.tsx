@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthCard from "@/components/AuthCard";
+import { API_BASE } from "@/lib/config";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export default function ForgotPasswordPage() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+      const res = await fetch(`${API_BASE}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),

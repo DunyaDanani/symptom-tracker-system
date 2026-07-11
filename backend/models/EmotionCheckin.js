@@ -47,6 +47,18 @@ const emotionCheckinSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+
+    // Was the child's self check-in submitted during the school day or
+    // afterwards (e.g. from home in the evening)? Set automatically from
+    // the server clock at submission time — not shown to the child, but
+    // carried through to the activity-plan response so the "even after
+    // school hours" suggestion flow can eventually feed this into the AI
+    // step. Purely informational for now (no gating on it anywhere).
+    context: {
+      type: String,
+      enum: ["school", "home"],
+      default: "school",
+    },
   },
   {
     timestamps: true,

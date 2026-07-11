@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { openAuthenticatedFile } from "@/lib/fileAccess";
 
+import { API_BASE } from "@/lib/config";
 interface SentMessage {
   _id: string;
   recipient: { name: string; role: string } | null;
@@ -12,9 +14,6 @@ interface SentMessage {
   read: boolean;
   createdAt: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
-const FILE_BASE = "http://localhost:5000";
 
 const ROLE_LABELS: Record<string, string> = {
   child: "Student",
@@ -96,14 +95,15 @@ export default function MessageSentList() {
             {m.body}
           </p>
           {m.attachmentPath && (
-            <a
-              href={`${FILE_BASE}/${m.attachmentPath.replace(/\\/g, "/")}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                openAuthenticatedFile(`${API_BASE}/messages/${m._id}/attachment`)
+              }
               className="text-xs text-blue-600 hover:underline mt-2 inline-block"
             >
               📎 {m.attachmentName || "Attachment"}
-            </a>
+            </button>
           )}
         </div>
       ))}

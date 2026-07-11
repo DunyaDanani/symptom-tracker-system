@@ -20,6 +20,16 @@ const studentSchema = new mongoose.Schema(
       required: true,
     },
 
+    // School-assigned admission number (admin types it in — not
+    // auto-generated). Doubles as the basis for the child's login
+    // username per the credential scheme, so it must be unique.
+    admissionNumber: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+
     firstName: {
       type: String,
       required: true,
@@ -88,6 +98,10 @@ const studentSchema = new mongoose.Schema(
       required: true,
       trim: true,
       lowercase: true,
+      match: [
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        "Please provide a valid email address",
+      ],
     },
 
     parentPhone: {

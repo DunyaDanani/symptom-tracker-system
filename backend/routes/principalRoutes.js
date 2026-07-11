@@ -3,6 +3,7 @@ import {
   getStats,
   getAttention,
   getRoster,
+  getTeacherProfile,
 } from "../controllers/principalController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -27,5 +28,6 @@ router.use((req, res, next) => {
 router.get("/stats", getStats);
 router.get("/attention", getAttention);
 router.get("/students", getRoster);
+router.get("/teachers/:teacherId", getTeacherProfile);
 
 export default router;

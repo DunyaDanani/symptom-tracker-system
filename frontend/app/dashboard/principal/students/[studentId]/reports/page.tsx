@@ -4,8 +4,9 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
+import BackButton from "@/components/BackButton";
 
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "@/lib/config";
 
 export default function PrincipalStudentReportsPage({
   params,
@@ -47,12 +48,7 @@ export default function PrincipalStudentReportsPage({
 
   return (
     <PrincipalDashboardLayout>
-      <Link
-        href="/dashboard/principal/students"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Students
-      </Link>
+      <BackButton />
 
       <div className="flex items-center justify-between mt-2 mb-6">
         <h1 className="text-2xl font-semibold text-blue-900">Reports</h1>

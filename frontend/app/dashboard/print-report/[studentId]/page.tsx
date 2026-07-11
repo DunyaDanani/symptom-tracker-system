@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
 
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "@/lib/config";
 
 interface StudentProfile {
   _id: string;
@@ -19,10 +19,18 @@ interface StudentProfile {
   parentUser?: { name: string } | null;
 }
 
+interface MedicationEntry {
+  name: string;
+  dosage?: string;
+  time?: string;
+}
+
 interface SymptomLogEntry {
   _id: string;
   symptoms: string[];
   additionalNotes?: string;
+  medications?: MedicationEntry[];
+  medicationNotes?: string;
   createdAt: string;
 }
 
@@ -42,9 +50,10 @@ const EMOJI_ICON: Record<string, string> = {
   very_happy: "😄 Very happy",
 };
 
-const RANGE_DAYS: Record<"weekly" | "monthly", number> = {
+const RANGE_DAYS: Record<"weekly" | "monthly" | "quarterly", number> = {
   weekly: 7,
   monthly: 35,
+  quarterly: 92,
 };
 
 export default function PrintReportPage({
@@ -54,7 +63,9 @@ export default function PrintReportPage({
 }) {
   const { studentId } = use(params);
 
-  const [range, setRange] = useState<"weekly" | "monthly">("weekly");
+  const [range, setRange] = useState<"weekly" | "monthly" | "quarterly">(
+    "weekly"
+  );
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [trend, setTrend] = useState<{ label: string; count: number }[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLogEntry[]>([]);
@@ -73,7 +84,11 @@ export default function PrintReportPage({
     const initialRange = new URLSearchParams(window.location.search).get(
       "range"
     );
-    if (initialRange === "monthly" || initialRange === "weekly") {
+    if (
+      initialRange === "monthly" ||
+      initialRange === "weekly" ||
+      initialRange === "quarterly"
+    ) {
       setRange(initialRange);
     }
   }, []);
@@ -161,6 +176,16 @@ export default function PrintReportPage({
           >
             Monthly (Last 5 Weeks)
           </button>
+          <button
+            onClick={() => setRange("quarterly")}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              range === "quarterly"
+                ? "bg-sky-300 text-gray-900"
+                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
+            }`}
+          >
+            3-Month Final Conclusion
+          </button>
         </div>
         <button
           onClick={() => window.print()}
@@ -200,7 +225,9 @@ export default function PrintReportPage({
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-gray-700">
-                  Symptom &amp; Emotion Report
+                  {range === "quarterly"
+                    ? "3-Month Final Conclusion Report"
+                    : "Symptom & Emotion Report"}
                 </p>
                 <p className="text-xs text-gray-400">
                   Generated {generatedAt.toLocaleDateString()} by{" "}
@@ -237,7 +264,11 @@ export default function PrintReportPage({
               <InfoRow
                 label="Report Period"
                 value={
-                  range === "weekly" ? "Last 7 Days" : "Last 5 Weeks (35 Days)"
+                  range === "weekly"
+                    ? "Last 7 Days"
+                    : range === "monthly"
+                    ? "Last 5 Weeks (35 Days)"
+                    : "3-Month Final Conclusion (Last 92 Days)"
                 }
               />
             </div>
@@ -266,8 +297,11 @@ export default function PrintReportPage({
                       <th className="py-1.5 pr-3 font-semibold text-gray-600 whitespace-nowrap">
                         Date
                       </th>
-                      <th className="py-1.5 font-semibold text-gray-600">
+                      <th className="py-1.5 pr-3 font-semibold text-gray-600">
                         Symptoms Observed
+                      </th>
+                      <th className="py-1.5 font-semibold text-gray-600">
+                        Medication
                       </th>
                     </tr>
                   </thead>
@@ -277,11 +311,26 @@ export default function PrintReportPage({
                         <td className="py-2 pr-3 align-top whitespace-nowrap text-gray-600">
                           {new Date(log.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="py-2 align-top text-gray-800">
+                        <td className="py-2 pr-3 align-top text-gray-800">
                           {log.symptoms.join("; ")}
                           {log.additionalNotes && (
                             <p className="text-gray-400 mt-0.5">
                               Note: {log.additionalNotes}
+                            </p>
+                          )}
+                        </td>
+                        <td className="py-2 align-top text-gray-800">
+                          {log.medications && log.medications.length > 0
+                            ? log.medications
+                                .map(
+                                  (m) =>
+                                    `${m.name}${m.dosage ? ` (${m.dosage})` : ""}`
+                                )
+                                .join("; ")
+                            : "—"}
+                          {log.medicationNotes && (
+                            <p className="text-gray-400 mt-0.5">
+                              {log.medicationNotes}
                             </p>
                           )}
                         </td>
@@ -376,3 +425,4 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+   

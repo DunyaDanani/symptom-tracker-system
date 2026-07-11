@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
 
 interface AssignedStudent {
   _id: string;
@@ -23,7 +25,7 @@ export default function TeacherEmotionTrackingListPage() {
     const fetchStudents = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch("http://localhost:5000/api/teacher/students", {
+        const res = await fetch(`${API_BASE}/teacher/students`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -45,7 +47,8 @@ export default function TeacherEmotionTrackingListPage() {
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
+      <BackButton />
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Emotion Tracker
       </h1>
       <p className="text-sm text-gray-500 -mt-6 mb-8">

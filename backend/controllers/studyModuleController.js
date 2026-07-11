@@ -1,6 +1,6 @@
 import fs from "fs";
 import Student from "../models/Student.js";
-import StudyResource from "../models/StudyResource.js";
+import StudyResource, { SUBJECTS } from "../models/StudyResource.js";
 
 // Shared ownership check — makes sure the requesting user is actually
 // allowed to touch this student's study resources.
@@ -42,15 +42,18 @@ export const getResources = async (req, res) => {
       createdAt: -1,
     });
 
-    const pastPapers = resources.filter((r) => r.type === "pastPaper");
-    const doctorNotes = resources.filter((r) => r.type === "doctorNote");
+    // Modules: subject folder -> topic sub-groups -> files. All 5 subject
+    // folders are always returned (even empty) so the UI can show them as
+    // persistent folders rather than only appearing once something's
+    // uploaded.
+    const modules = SUBJECTS.map((subject) => {
+      const subjectResources = resources.filter(
+        (r) => r.type === "module" && r.subject === subject
+      );
 
-    // Group module files by topic, keeping most-recently-uploaded topics first.
-    const topicOrder = [];
-    const topicMap = {};
-    resources
-      .filter((r) => r.type === "module")
-      .forEach((r) => {
+      const topicOrder = [];
+      const topicMap = {};
+      subjectResources.forEach((r) => {
         const key = r.topic || "Untitled Topic";
         if (!topicMap[key]) {
           topicMap[key] = [];
@@ -58,16 +61,26 @@ export const getResources = async (req, res) => {
         }
         topicMap[key].push(r);
       });
-    const modules = topicOrder.map((topic) => ({
-      topic,
-      files: topicMap[topic],
+
+      return {
+        subject,
+        topics: topicOrder.map((topic) => ({ topic, files: topicMap[topic] })),
+      };
+    });
+
+    // Past papers: subject folder -> flat file list. Same always-show-all-5
+    // approach as modules.
+    const pastPapers = SUBJECTS.map((subject) => ({
+      subject,
+      files: resources.filter(
+        (r) => r.type === "pastPaper" && r.subject === subject
+      ),
     }));
 
     res.json({
       success: true,
       modules,
       pastPapers,
-      doctorNotes,
     });
   } catch (error) {
     console.error(error);
@@ -79,10 +92,12 @@ export const getResources = async (req, res) => {
 };
 
 // @route   POST /api/study-modules
-// @access  Shadow Teacher (module, pastPaper), Parent (doctorNote)
-// Body (multipart/form-data): studentId, type, topic? (required for "module"), file
+// @access  Shadow Teacher only (module, pastPaper) — doctor's recommendation
+// uploads now go through the dedicated /api/doctor-documents endpoints.
+// Body (multipart/form-data): studentId, type, subject, topic? (required
+// for "module"), file
 export const uploadResource = async (req, res) => {
-  const { studentId, type, topic } = req.body;
+  const { studentId, type, subject, topic } = req.body;
 
   try {
     if (!req.file) {
@@ -92,24 +107,17 @@ export const uploadResource = async (req, res) => {
       });
     }
 
-    if (!["module", "pastPaper", "doctorNote"].includes(type)) {
+    if (!["module", "pastPaper"].includes(type)) {
       return res.status(400).json({
         success: false,
         message: "Invalid resource type",
       });
     }
 
-    if (req.user.role === "shadow_teacher" && !["module", "pastPaper"].includes(type)) {
-      return res.status(403).json({
+    if (!SUBJECTS.includes(subject)) {
+      return res.status(400).json({
         success: false,
-        message: "Teachers can only upload modules or past papers",
-      });
-    }
-
-    if (req.user.role === "parent" && type !== "doctorNote") {
-      return res.status(403).json({
-        success: false,
-        message: "Parents can only upload the doctor's recommendation note",
+        message: "A valid subject folder is required",
       });
     }
 
@@ -138,6 +146,7 @@ export const uploadResource = async (req, res) => {
     const resource = await StudyResource.create({
       student: studentId,
       type,
+      subject,
       topic: type === "module" ? topic.trim() : undefined,
       fileName: req.file.originalname,
       filePath: req.file.path,
@@ -158,8 +167,51 @@ export const uploadResource = async (req, res) => {
   }
 };
 
+// @route   GET /api/study-modules/:id/file
+// @access  Child (own profile), Parent (own child), Shadow Teacher (assigned)
+// Streams the actual file. Replaces the old unauthenticated static
+// /uploads mount — re-runs the same ownership check as the listing
+// endpoint before ever touching the file on disk.
+export const downloadResource = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const resource = await StudyResource.findById(id);
+    if (!resource) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found",
+      });
+    }
+
+    const student = await Student.findById(resource.student);
+    if (!student || !canAccessStudent(student, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to this file",
+      });
+    }
+
+    res.download(resource.filePath, resource.fileName, (err) => {
+      if (err && !res.headersSent) {
+        console.error(err);
+        res.status(404).json({
+          success: false,
+          message: "File could not be found on the server",
+        });
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   DELETE /api/study-modules/:id
-// @access  Whoever uploaded the file (Shadow Teacher or Parent)
+// @access  Shadow Teacher (whoever uploaded the file)
 export const deleteResource = async (req, res) => {
   const { id } = req.params;
 

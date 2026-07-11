@@ -3,11 +3,21 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
+
+import { API_BASE } from "@/lib/config";
+interface MedicationEntry {
+  name: string;
+  dosage?: string;
+  time?: string;
+}
 
 interface SymptomLogEntry {
   _id: string;
   symptoms: string[];
   additionalNotes?: string;
+  medications?: MedicationEntry[];
+  medicationNotes?: string;
   createdAt: string;
 }
 
@@ -30,8 +40,6 @@ const EMOJI_OPTIONS: { value: string; icon: string; label: string }[] = [
 const EMOJI_ICON: Record<string, string> = Object.fromEntries(
   EMOJI_OPTIONS.map((o) => [o.value, o.icon])
 );
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function AdminStudentHistoryPage({
   params,
@@ -285,8 +293,8 @@ export default function AdminStudentHistoryPage({
 
   const startEditCheckin = (c: EmotionCheckinEntry) => {
     setEditingCheckinId(c._id);
-    setEditChildEmoji(c.childEmoji);
-    setEditTeacherEmoji(c.teacherEmoji);
+    setEditChildEmoji(c.childEmoji || "");
+    setEditTeacherEmoji(c.teacherEmoji || "");
   };
 
   const saveEditCheckin = async (checkinId: string) => {
@@ -329,12 +337,7 @@ export default function AdminStudentHistoryPage({
 
   return (
     <DashboardLayout>
-      <Link
-        href="/dashboard/admin"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Dashboard
-      </Link>
+      <BackButton />
 
       <div className="flex items-center justify-between mt-2 mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">
@@ -355,35 +358,37 @@ export default function AdminStudentHistoryPage({
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
         <>
-          <div className="bg-white rounded-md shadow-sm p-6 mb-6 max-w-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-gray-700">
-                Needs Attention Flag
-              </p>
-              {flagged && (
-                <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                  Flagged
-                </span>
-              )}
+          <div className="bg-white rounded-md shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between gap-6 flex-wrap">
+              <div className="flex items-center gap-3">
+                <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                  Needs Attention Flag
+                </p>
+                {flagged && (
+                  <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                    Flagged
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={flagNote}
+                onChange={(e) => setFlagNote(e.target.value)}
+                placeholder="Optional note for the principal (e.g. reason for concern)"
+                rows={1}
+                className="flex-1 min-w-[240px] text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
+              />
+              <button
+                onClick={toggleFlag}
+                disabled={savingFlag}
+                className={`text-sm font-medium px-5 py-2.5 rounded transition-colors disabled:opacity-60 shrink-0 ${
+                  flagged
+                    ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                }`}
+              >
+                {savingFlag ? "Saving..." : flagged ? "Clear Flag" : "Flag for Attention"}
+              </button>
             </div>
-            <textarea
-              value={flagNote}
-              onChange={(e) => setFlagNote(e.target.value)}
-              placeholder="Optional note for the principal (e.g. reason for concern)"
-              rows={2}
-              className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 outline-none focus:border-blue-400"
-            />
-            <button
-              onClick={toggleFlag}
-              disabled={savingFlag}
-              className={`text-sm font-medium px-5 py-2.5 rounded transition-colors disabled:opacity-60 ${
-                flagged
-                  ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }`}
-            >
-              {savingFlag ? "Saving..." : flagged ? "Clear Flag" : "Flag for Attention"}
-            </button>
           </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -500,6 +505,17 @@ export default function AdminStudentHistoryPage({
                           {log.additionalNotes && (
                             <p className="text-xs text-gray-400 mt-1">
                               {log.additionalNotes}
+                            </p>
+                          )}
+                          {log.medications && log.medications.length > 0 && (
+                            <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1 inline-block">
+                              💊{" "}
+                              {log.medications
+                                .map(
+                                  (m) =>
+                                    `${m.name}${m.dosage ? ` (${m.dosage})` : ""}`
+                                )
+                                .join(", ")}
                             </p>
                           )}
                         </div>
@@ -658,8 +674,8 @@ export default function AdminStudentHistoryPage({
                             {new Date(c.createdAt).toLocaleString()}
                           </p>
                           <p className="text-lg mt-1">
-                            {EMOJI_ICON[c.childEmoji] || "—"}{" "}
-                            {EMOJI_ICON[c.teacherEmoji] || "—"}{" "}
+                            {(c.childEmoji && EMOJI_ICON[c.childEmoji]) || "—"}{" "}
+                            {(c.teacherEmoji && EMOJI_ICON[c.teacherEmoji]) || "—"}{" "}
                             <span className="text-sm text-gray-600 align-middle">
                               ({c.compositeScore})
                             </span>

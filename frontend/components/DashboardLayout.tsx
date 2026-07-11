@@ -3,8 +3,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useState } from "react";
-import NotificationBell from "./NotificationBell";
+import { ReactNode, useEffect, useState } from "react";
+import AlertsNotificationsBell from "./AlertsNotificationsBell";
+import UserMenu from "./UserMenu";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -14,7 +15,9 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard/admin", icon: DashboardIcon },
   { label: "Branches", href: "/dashboard/admin/students", icon: BranchIcon },
   { label: "Messages", href: "/dashboard/admin/messages", icon: MessagesIcon },
-  { label: "Doc Reviews", href: "/dashboard/admin/doc-reviews", icon: DocIcon },
+  { label: "Doc Recommendations", href: "/dashboard/admin/doc-reviews", icon: DocIcon },
+  { label: "Notice", href: "/dashboard/admin/notice", icon: NoticeIcon },
+  { label: "Alerts", href: "/dashboard/admin/alerts", icon: AlertIcon },
 ];
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -22,9 +25,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [userName, setUserName] = useState<string>("User");
 
+  useEffect(() => {
+    // localStorage is only available client-side, so this can't be read
+    // during the initial render — hence the effect instead of lazy state.
+    const storedName = localStorage.getItem("name");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value, not derived state
+    if (storedName) setUserName(storedName);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("name");
     router.push("/login");
   };
 
@@ -104,37 +116,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             Communication
           </Link>
 
-          <NotificationBell messagesHref="/dashboard/admin/messages" />
+          <AlertsNotificationsBell messagesHref="/dashboard/admin/messages" />
 
-          <div className="flex items-center gap-2 text-white text-sm">
-            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
-              </svg>
-            </div>
-            User
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            title="Log out"
-            className="text-white hover:opacity-80 transition-opacity"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 000-2H3zm10.293 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H8a1 1 0 110-2h6.586l-1.293-1.293a1 1 0 010-1.414z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
+          <UserMenu
+            name={userName}
+            accountHref="/dashboard/admin/account"
+            dashboardHref="/dashboard/admin"
+            onLogout={handleLogout}
+          />
         </header>
 
         {/* Page content */}
@@ -179,6 +168,26 @@ function DocIcon({ className }: { className?: string }) {
       <path
         fillRule="evenodd"
         d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function NoticeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M10 2a1 1 0 011 1v.083A6.002 6.002 0 0116 9v3.586l1.707 1.707A1 1 0 0117 16H3a1 1 0 01-.707-1.707L4 12.586V9a6.002 6.002 0 015-5.917V2a1 1 0 011-1zm0 15a2 2 0 002-2H8a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function AlertIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fillRule="evenodd"
+        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l6.28 11.19c.75 1.334-.213 2.98-1.742 2.98H3.72c-1.53 0-2.492-1.646-1.743-2.98l6.28-11.19zM11 14a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"
         clipRule="evenodd"
       />
     </svg>

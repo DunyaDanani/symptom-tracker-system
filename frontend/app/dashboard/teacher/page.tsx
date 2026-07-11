@@ -4,12 +4,22 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import MiniCalendar from "@/components/MiniCalendar";
+import { API_BASE } from "@/lib/config";
 
 interface TeacherProfile {
   name: string;
   qualification: string;
   specialization: string;
   experienceYears: number;
+}
+
+interface AssignedStudent {
+  _id: string;
+  firstName: string;
+  lastName: string;
+  grade: string;
+  section?: string;
+  flagged?: boolean;
 }
 
 const tiles = [
@@ -29,7 +39,7 @@ const tiles = [
     label: "Study Module",
     icon: StudyIcon,
     color: "bg-blue-50 text-blue-600",
-    href: null,
+    href: "/dashboard/teacher/upload-modules",
   },
   {
     label: "Reports",
@@ -45,11 +55,15 @@ export default function TeacherDashboardPage() {
   const [error, setError] = useState("");
   const [today] = useState(new Date());
 
+  const [students, setStudents] = useState<AssignedStudent[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [studentsError, setStudentsError] = useState("");
+
   useEffect(() => {
     const fetchProfile = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch("http://localhost:5000/api/teacher/profile", {
+        const res = await fetch(`${API_BASE}/teacher/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -67,6 +81,30 @@ export default function TeacherDashboardPage() {
     };
 
     fetchProfile();
+  }, []);
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`${API_BASE}/teacher/students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) {
+          setStudents(data.students);
+        } else {
+          setStudentsError(data.message || "Could not load your students");
+        }
+      } catch (err) {
+        console.error("Failed to load students", err);
+        setStudentsError("Unable to reach the server");
+      } finally {
+        setStudentsLoading(false);
+      }
+    };
+
+    fetchStudents();
   }, []);
 
   return (
@@ -99,6 +137,54 @@ export default function TeacherDashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* My Students — direct one-click path to each student's profile,
+          where the flag control lives */}
+      <div className="bg-white rounded-md shadow-sm overflow-hidden mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 p-6 pb-4">
+          My Students
+        </h2>
+
+        {studentsLoading ? (
+          <p className="px-6 pb-6 text-gray-400 text-sm">Loading...</p>
+        ) : studentsError ? (
+          <p className="px-6 pb-6 text-red-500 text-sm">{studentsError}</p>
+        ) : students.length === 0 ? (
+          <p className="px-6 pb-6 text-gray-400 text-sm">
+            No students are currently assigned to you.
+          </p>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {students.map((s) => (
+              <div
+                key={s._id}
+                className="flex items-center justify-between px-6 py-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-800">
+                    {s.firstName} {s.lastName}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    Grade {s.grade}
+                    {s.section ? ` · ${s.section}` : ""}
+                  </span>
+                  {s.flagged && (
+                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                      Flagged
+                    </span>
+                  )}
+                </div>
+                <Link
+                  href={`/dashboard/teacher/students/${s._id}`}
+                  className="text-xs font-medium text-blue-600 hover:underline shrink-0"
+                >
+                  View Profile
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

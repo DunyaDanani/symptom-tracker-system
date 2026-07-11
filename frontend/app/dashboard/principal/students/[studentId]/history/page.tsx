@@ -1,8 +1,9 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
 
 interface SymptomLogEntry {
   _id: string;
@@ -46,7 +47,7 @@ export default function PrincipalStudentHistoryPage({
       const token = localStorage.getItem("token");
       try {
         const res = await fetch(
-          `http://localhost:5000/api/students/${studentId}/history`,
+          `${API_BASE}/students/${studentId}/history`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const data = await res.json();
@@ -69,12 +70,7 @@ export default function PrincipalStudentHistoryPage({
 
   return (
     <PrincipalDashboardLayout>
-      <Link
-        href="/dashboard/principal/students"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Students
-      </Link>
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Student History

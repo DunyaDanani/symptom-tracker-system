@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
 
 interface AssignedStudent {
   _id: string;
@@ -12,6 +14,7 @@ interface AssignedStudent {
   section?: string;
   diagnosis: string;
   communicationLevel: string;
+  flagged?: boolean;
 }
 
 export default function TeacherStudentsPage() {
@@ -23,7 +26,7 @@ export default function TeacherStudentsPage() {
     const fetchStudents = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch("http://localhost:5000/api/teacher/students", {
+        const res = await fetch(`${API_BASE}/teacher/students`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -45,7 +48,8 @@ export default function TeacherStudentsPage() {
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
+      <BackButton />
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Symptom Tracking
       </h1>
       <p className="text-sm text-gray-500 -mt-6 mb-8">
@@ -66,11 +70,18 @@ export default function TeacherStudentsPage() {
             <Link
               key={s._id}
               href={`/dashboard/teacher/students/${s._id}/symptoms`}
-              className="bg-white rounded-md shadow-sm p-5 hover:shadow-md transition-shadow"
+              className="block bg-white rounded-md shadow-sm p-5 hover:shadow-md transition-shadow"
             >
-              <p className="font-semibold text-gray-800">
-                {s.firstName} {s.lastName}
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-semibold text-gray-800">
+                  {s.firstName} {s.lastName}
+                </p>
+                {s.flagged && (
+                  <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0">
+                    Flagged
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-500 mt-1">
                 Grade {s.grade}
                 {s.section ? ` · ${s.section}` : ""}

@@ -1,9 +1,10 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
+import BackButton from "@/components/BackButton";
 
+import { API_BASE } from "@/lib/config";
 interface StudentSummary {
   _id: string;
   firstName: string;
@@ -20,6 +21,12 @@ interface EmotionCheckinEntry {
   createdAt: string;
 }
 
+interface TodayCheckin {
+  childEmoji?: string;
+  teacherEmoji?: string;
+  compositeScore?: number;
+}
+
 const EMOJI_OPTIONS: { value: string; icon: string; label: string }[] = [
   { value: "very_sad", icon: "😢", label: "Very sad" },
   { value: "sad", icon: "🙁", label: "Sad" },
@@ -32,8 +39,6 @@ const EMOJI_ICON: Record<string, string> = Object.fromEntries(
   EMOJI_OPTIONS.map((o) => [o.value, o.icon])
 );
 
-const API_BASE = "http://localhost:5000/api";
-
 export default function TeacherEmotionTrackerPage({
   params,
 }: {
@@ -44,6 +49,7 @@ export default function TeacherEmotionTrackerPage({
   const [student, setStudent] = useState<StudentSummary | null>(null);
   const [teacherEmoji, setTeacherEmoji] = useState("");
   const [history, setHistory] = useState<EmotionCheckinEntry[]>([]);
+  const [today, setToday] = useState<TodayCheckin | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +68,15 @@ export default function TeacherEmotionTrackerPage({
     );
     const data = await res.json();
     if (data.success) setHistory(data.checkins);
+  };
+
+  const loadToday = async () => {
+    const res = await fetch(
+      `${API_BASE}/teacher/students/${studentId}/today`,
+      { headers: authHeaders() }
+    );
+    const data = await res.json();
+    if (data.success) setToday(data.emotionCheckin || null);
   };
 
   useEffect(() => {
@@ -83,7 +98,7 @@ export default function TeacherEmotionTrackerPage({
           }
         }
 
-        await loadHistory();
+        await Promise.all([loadHistory(), loadToday()]);
       } catch (err) {
         console.error("Failed to load emotion tracker data", err);
         setError("Unable to reach the server");
@@ -121,7 +136,7 @@ export default function TeacherEmotionTrackerPage({
           `Check-in saved (composite score: ${data.checkin.compositeScore})`
         );
         setTeacherEmoji("");
-        await loadHistory();
+        await Promise.all([loadHistory(), loadToday()]);
       } else {
         setStatus(data.message || "Could not save check-in.");
       }
@@ -141,12 +156,7 @@ export default function TeacherEmotionTrackerPage({
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
         <>
-          <Link
-            href={`/dashboard/teacher/students/${studentId}`}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            &larr; Back to {student?.firstName}
-          </Link>
+          <BackButton />
 
           <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
             Emotion Tracker
@@ -156,6 +166,37 @@ export default function TeacherEmotionTrackerPage({
             {student?.section ? ` · ${student.section}` : ""}
           </p>
 
+          {/* Step 1: the child's own check-in for today */}
+          <div className="bg-white rounded-md shadow-sm p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-1">
+              Step 1 · Child&apos;s Check-in Today
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">
+              The child checks in first, from their own dashboard — anytime
+              during the day.
+            </p>
+
+            {today?.childEmoji ? (
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">
+                  {EMOJI_ICON[today.childEmoji]}
+                </span>
+                <span className="text-sm text-gray-700">
+                  {student?.firstName} said they&apos;re feeling{" "}
+                  {EMOJI_OPTIONS.find((o) => o.value === today.childEmoji)
+                    ?.label || today.childEmoji}{" "}
+                  today.
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">
+                {student?.firstName} hasn&apos;t checked in yet today. You
+                can still add your own observation below — the child&apos;s
+                side will fill in whenever they do.
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Emotion check-in form */}
             <form
@@ -163,11 +204,11 @@ export default function TeacherEmotionTrackerPage({
               className="bg-white rounded-md shadow-sm p-6"
             >
               <h2 className="text-sm font-semibold text-gray-700 mb-1">
-                Emotion Check-in
+                Step 2 · Your Observation
               </h2>
               <p className="text-xs text-gray-400 mb-4">
-                The child records their own feeling from their dashboard —
-                this just records your independent observation.
+                Record your own independent observation of how the child
+                seemed today — separate from what they reported above.
               </p>
 
               <p className="text-xs text-gray-500 mb-2">

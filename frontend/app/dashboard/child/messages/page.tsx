@@ -1,13 +1,15 @@
 "use client";
 
-import ChildDashboardLayout from "@/components/ChildDashboardLayout";
+import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import MessagesPanel from "@/components/MessagesPanel";
+import BackButton from "@/components/BackButton";
 
 export default function ChildMessagesPage() {
   return (
-    <ChildDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mb-8">Messages</h1>
+    <FamilyDashboardLayout role="child">
+      <BackButton />
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">Messages</h1>
       <MessagesPanel showCompose />
-    </ChildDashboardLayout>
+    </FamilyDashboardLayout>
   );
 }

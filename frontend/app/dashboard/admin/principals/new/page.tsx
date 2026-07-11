@@ -3,23 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
 
+import { API_BASE } from "@/lib/config";
 interface Credentials {
   username: string;
   password: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function CreatePrincipalPage() {
   const router = useRouter();
   const [branches, setBranches] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [branch, setBranch] = useState("");
+  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     const loadBranches = async () => {
@@ -60,7 +62,7 @@ export default function CreatePrincipalPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, branch }),
+        body: JSON.stringify({ name, branch, email: email.trim() }),
       });
       const data = await res.json();
 
@@ -71,6 +73,7 @@ export default function CreatePrincipalPage() {
       }
 
       setCredentials(data.credentials);
+      setEmailSent(Boolean(data.emailSent));
       setSuccess(true);
     } catch (err) {
       console.error("Failed to create principal", err);
@@ -83,7 +86,9 @@ export default function CreatePrincipalPage() {
   const resetForm = () => {
     setName("");
     setBranch(branches[0] || "");
+    setEmail("");
     setCredentials(null);
+    setEmailSent(false);
     setSuccess(false);
   };
 
@@ -98,6 +103,14 @@ export default function CreatePrincipalPage() {
           <div className="bg-white rounded-md shadow-sm p-6">
             <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded p-4 mb-6">
               Principal account for {name} ({branch}) created successfully.
+              {email.trim() && (
+                <>
+                  {" "}
+                  {emailSent
+                    ? "Login credentials were emailed to " + email.trim() + "."
+                    : "We couldn't send the credentials email — please share the details below manually."}
+                </>
+              )}
             </div>
 
             <h2 className="font-semibold text-gray-700 mb-4">Login credentials</h2>
@@ -139,7 +152,8 @@ export default function CreatePrincipalPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-xl">
+      <BackButton />
+      <div className="max-w-xl mt-2">
         <h1 className="text-xl font-semibold text-gray-800 mb-6">
           Create Branch Principal
         </h1>
@@ -175,8 +189,19 @@ export default function CreatePrincipalPage() {
             ))}
           </select>
 
+          <label className="block text-xs font-medium text-gray-500 mb-1">
+            Email <span className="text-gray-400">(optional)</span>
+          </label>
+          <input
+            type="email"
+            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-1 outline-none focus:border-sky-400"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="e.g. nadeesha@school.edu"
+          />
           <p className="text-xs text-gray-400 mb-6">
-            Login credentials will be auto-generated and shown after you
+            Used for account recovery and to email login credentials
+            directly. Login credentials will also be shown here after you
             confirm.
           </p>
 

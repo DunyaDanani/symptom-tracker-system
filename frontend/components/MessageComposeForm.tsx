@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { API_BASE } from "@/lib/config";
 interface Recipient {
   id: string;
   name: string;
   roleLabel: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function MessageComposeForm() {
   const [recipients, setRecipients] = useState<Recipient[]>([]);
@@ -20,6 +19,7 @@ export default function MessageComposeForm() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [sendSuccess, setSendSuccess] = useState(false);
   const [sending, setSending] = useState(false);
 
   const authHeaders = () => {
@@ -60,6 +60,7 @@ export default function MessageComposeForm() {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("");
+    setSendSuccess(false);
 
     if (!recipientId || !category || !body) {
       setStatus("Select a recipient, a category, and write a message.");
@@ -83,16 +84,19 @@ export default function MessageComposeForm() {
       const data = await res.json();
 
       if (data.success) {
-        setStatus("Message sent.");
+        setStatus("Message sent successfully");
+        setSendSuccess(true);
         setRecipientId("");
         setCategory("");
         setBody("");
         setFile(null);
       } else {
+        setSendSuccess(false);
         setStatus(data.message || "Could not send message.");
       }
     } catch (err) {
       console.error("Failed to send message", err);
+      setSendSuccess(false);
       setStatus("Unable to reach the server.");
     } finally {
       setSending(false);
@@ -110,15 +114,8 @@ export default function MessageComposeForm() {
   return (
     <form
       onSubmit={handleSend}
-      className="bg-white rounded-md shadow-sm p-6 max-w-xl"
+      className="bg-white rounded-md shadow-sm p-6 max-w-xl mx-auto"
     >
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-base font-medium text-gray-800">
-          Create Message
-        </h2>
-        <ChevronDownIcon className="w-4 h-4 text-gray-400" />
-      </div>
-
       <label className="block text-sm font-medium text-gray-700 mb-1">
         01. Select Recipient
       </label>
@@ -174,7 +171,15 @@ export default function MessageComposeForm() {
         className="text-sm mb-5"
       />
 
-      {status && <p className="text-xs text-gray-500 mb-4">{status}</p>}
+      {status && (
+        <p
+          className={`text-sm mb-4 ${
+            sendSuccess ? "text-green-600 font-medium" : "text-red-500"
+          }`}
+        >
+          {status}
+        </p>
+      )}
 
       <div className="flex justify-end">
         <button
@@ -186,17 +191,5 @@ export default function MessageComposeForm() {
         </button>
       </div>
     </form>
-  );
-}
-
-function ChevronDownIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-        clipRule="evenodd"
-      />
-    </svg>
   );
 }

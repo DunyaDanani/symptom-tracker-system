@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
+import BackButton from "@/components/BackButton";
+import {
+  GRADE_TAXONOMY,
+  UNGROUPED_CATEGORY,
+  categoryForGrade,
+} from "@/lib/gradeTaxonomy";
+import { API_BASE } from "@/lib/config";
 
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
   grade: string;
-  section?: string;
-  diagnosis: string;
-  flagged?: boolean;
-  assignedTeacher?: { name: string } | null;
 }
 
 export default function PrincipalStudentsPage() {
@@ -24,7 +25,7 @@ export default function PrincipalStudentsPage() {
     const load = async () => {
       const token = localStorage.getItem("token");
       try {
-        const res = await fetch("http://localhost:5000/api/principal/students", {
+        const res = await fetch(`${API_BASE}/principal/students`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -44,78 +45,71 @@ export default function PrincipalStudentsPage() {
     load();
   }, []);
 
+  const countForCategory = (categorySlug: string) =>
+    students.filter((s) => categoryForGrade(s.grade)?.slug === categorySlug)
+      .length;
+
+  const ungroupedCount = students.filter(
+    (s) => !categoryForGrade(s.grade)
+  ).length;
+
   return (
     <PrincipalDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mb-8">Students</h1>
+      <BackButton />
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
+        Students
+      </h1>
+      <p className="text-sm text-gray-500 mb-8">
+        {students.length} student{students.length === 1 ? "" : "s"}
+      </p>
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
-        <div className="bg-white rounded-md shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 text-left">
-                <th className="px-4 py-3 font-semibold text-gray-700">Name</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">Grade</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">
-                  Shadow Teacher
-                </th>
-                <th className="px-4 py-3 font-semibold text-gray-700">Status</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">History</th>
-                <th className="px-4 py-3 font-semibold text-gray-700">Reports</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-4 text-gray-400">
-                    No students registered yet.
-                  </td>
-                </tr>
-              ) : (
-                students.map((s) => (
-                  <tr key={s._id} className="border-b border-gray-50">
-                    <td className="px-4 py-3">
-                      {s.firstName} {s.lastName}
-                    </td>
-                    <td className="px-4 py-3">{s.grade}</td>
-                    <td className="px-4 py-3">
-                      {s.assignedTeacher?.name || "Unassigned"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.flagged ? (
-                        <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                          Flagged
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/dashboard/principal/students/${s._id}/history`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/dashboard/principal/students/${s._id}/reports`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {GRADE_TAXONOMY.map((category) => (
+            <Link
+              key={category.slug}
+              href={`/dashboard/principal/students/classes/${category.slug}`}
+              className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow"
+            >
+              <FolderIcon className="w-12 h-12 text-amber-400" />
+              <p className="text-sm font-semibold text-gray-800 text-center">
+                {category.label}
+              </p>
+              <p className="text-xs text-gray-400">
+                {countForCategory(category.slug)} student
+                {countForCategory(category.slug) === 1 ? "" : "s"}
+              </p>
+            </Link>
+          ))}
+
+          {ungroupedCount > 0 && (
+            <Link
+              href={`/dashboard/principal/students/classes/${UNGROUPED_CATEGORY.slug}`}
+              className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow"
+            >
+              <FolderIcon className="w-12 h-12 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-800 text-center">
+                {UNGROUPED_CATEGORY.label}
+              </p>
+              <p className="text-xs text-gray-400">
+                {ungroupedCount} student{ungroupedCount === 1 ? "" : "s"}
+              </p>
+            </Link>
+          )}
         </div>
       )}
     </PrincipalDashboardLayout>
+  );
+}
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 6a2 2 0 012-2h4l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+    </svg>
   );
 }

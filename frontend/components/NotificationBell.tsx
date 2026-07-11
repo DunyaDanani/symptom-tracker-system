@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "@/lib/config";
 
 export default function NotificationBell({
   messagesHref,

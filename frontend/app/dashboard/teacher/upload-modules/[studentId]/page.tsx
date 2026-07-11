@@ -1,11 +1,11 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
-
-const API_BASE = "http://localhost:5000/api";
-const FILE_BASE = "http://localhost:5000";
+import BackButton from "@/components/BackButton";
+import { SUBJECTS } from "@/lib/subjects";
+import { openAuthenticatedFile } from "@/lib/fileAccess";
+import { API_BASE } from "@/lib/config";
 
 interface StudentSummary {
   _id: string;
@@ -27,6 +27,31 @@ interface TopicGroup {
   files: ResourceFile[];
 }
 
+interface ModuleSubjectGroup {
+  subject: string;
+  topics: TopicGroup[];
+}
+
+interface PastPaperSubjectGroup {
+  subject: string;
+  files: ResourceFile[];
+}
+
+interface BreakActivityEntry {
+  _id: string;
+  activities: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+type Tab = "modules" | "pastPapers" | "breakActivities";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "modules", label: "Modules" },
+  { key: "pastPapers", label: "Past Papers" },
+  { key: "breakActivities", label: "Break-Time Activities" },
+];
+
 export default function TeacherUploadModulesWorkspacePage({
   params,
 }: {
@@ -34,21 +59,36 @@ export default function TeacherUploadModulesWorkspacePage({
 }) {
   const { studentId } = use(params);
 
+  const [tab, setTab] = useState<Tab>("modules");
+
   const [student, setStudent] = useState<StudentSummary | null>(null);
-  const [modules, setModules] = useState<TopicGroup[]>([]);
-  const [pastPapers, setPastPapers] = useState<ResourceFile[]>([]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [modules, setModules] = useState<ModuleSubjectGroup[]>([]);
+  const [pastPapers, setPastPapers] = useState<PastPaperSubjectGroup[]>([]);
+  const [openSubject, setOpenSubject] = useState<Record<string, boolean>>({});
+  const [openTopic, setOpenTopic] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [moduleSubject, setModuleSubject] = useState<string>(SUBJECTS[0]);
   const [newTopic, setNewTopic] = useState("");
   const [moduleFile, setModuleFile] = useState<File | null>(null);
   const [moduleUploading, setModuleUploading] = useState(false);
   const [moduleError, setModuleError] = useState("");
 
+  const [pastPaperSubject, setPastPaperSubject] = useState<string>(SUBJECTS[0]);
   const [pastPaperFile, setPastPaperFile] = useState<File | null>(null);
   const [pastPaperUploading, setPastPaperUploading] = useState(false);
   const [pastPaperError, setPastPaperError] = useState("");
+
+  // Break-time activity logging
+  const [breakOptions, setBreakOptions] = useState<string[]>([]);
+  const [selectedBreakActivities, setSelectedBreakActivities] = useState<
+    string[]
+  >([]);
+  const [breakNotes, setBreakNotes] = useState("");
+  const [breakHistory, setBreakHistory] = useState<BreakActivityEntry[]>([]);
+  const [savingBreak, setSavingBreak] = useState(false);
+  const [breakStatus, setBreakStatus] = useState("");
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -83,13 +123,6 @@ export default function TeacherUploadModulesWorkspacePage({
       if (data.success) {
         setModules(data.modules);
         setPastPapers(data.pastPapers);
-        setExpanded((prev) => {
-          const next = { ...prev };
-          data.modules.forEach((m: TopicGroup) => {
-            if (!(m.topic in next)) next[m.topic] = true;
-          });
-          return next;
-        });
       } else {
         setError(data.message || "Could not load study modules");
       }
@@ -101,14 +134,45 @@ export default function TeacherUploadModulesWorkspacePage({
     }
   };
 
+  const loadBreakHistory = async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/teacher/students/${studentId}/break-activities`,
+        { headers: authHeaders() }
+      );
+      const data = await res.json();
+      if (data.success) setBreakHistory(data.logs);
+    } catch (err) {
+      console.error("Failed to load break activity history", err);
+    }
+  };
+
   useEffect(() => {
     loadStudent();
     loadResources();
+
+    const loadBreakOptions = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/teacher/break-activity-options`, {
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (data.success) setBreakOptions(data.options);
+      } catch (err) {
+        console.error("Failed to load break activity options", err);
+      }
+    };
+    loadBreakOptions();
+    loadBreakHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
 
-  const toggleTopic = (topic: string) => {
-    setExpanded((prev) => ({ ...prev, [topic]: !prev[topic] }));
+  const toggleSubject = (key: string) => {
+    setOpenSubject((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleTopic = (key: string) => {
+    setOpenTopic((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleModuleUpload = async (e: React.FormEvent) => {
@@ -129,6 +193,7 @@ export default function TeacherUploadModulesWorkspacePage({
       const formData = new FormData();
       formData.append("studentId", studentId);
       formData.append("type", "module");
+      formData.append("subject", moduleSubject);
       formData.append("topic", newTopic.trim());
       formData.append("file", moduleFile);
 
@@ -167,6 +232,7 @@ export default function TeacherUploadModulesWorkspacePage({
       const formData = new FormData();
       formData.append("studentId", studentId);
       formData.append("type", "pastPaper");
+      formData.append("subject", pastPaperSubject);
       formData.append("file", pastPaperFile);
 
       const res = await fetch(`${API_BASE}/study-modules`, {
@@ -202,189 +268,482 @@ export default function TeacherUploadModulesWorkspacePage({
     }
   };
 
+  const toggleBreakActivity = (activity: string) => {
+    setSelectedBreakActivities((prev) =>
+      prev.includes(activity)
+        ? prev.filter((a) => a !== activity)
+        : [...prev, activity]
+    );
+  };
+
+  const submitBreakActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBreakStatus("");
+
+    if (selectedBreakActivities.length === 0) {
+      setBreakStatus("Select at least one activity.");
+      return;
+    }
+
+    setSavingBreak(true);
+    try {
+      const res = await fetch(`${API_BASE}/teacher/break-activities`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          studentId,
+          activities: selectedBreakActivities,
+          notes: breakNotes,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBreakStatus("Break activity recorded.");
+        setSelectedBreakActivities([]);
+        setBreakNotes("");
+        await loadBreakHistory();
+      } else {
+        setBreakStatus(data.message || "Could not save break activity.");
+      }
+    } catch (err) {
+      console.error("Failed to submit break activity", err);
+      setBreakStatus("Unable to reach the server.");
+    } finally {
+      setSavingBreak(false);
+    }
+  };
+
   return (
     <TeacherDashboardLayout>
-      <Link
-        href="/dashboard/teacher/upload-modules"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back
-      </Link>
-
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
-        Modules
-      </h1>
+      <div className="flex items-center justify-between mt-2 mb-1">
+        <h1 className="text-2xl font-semibold text-blue-900">Modules</h1>
+        <BackButton />
+      </div>
       {student && (
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="text-sm text-gray-500 mb-6">
           {student.firstName} {student.lastName} · Grade {student.grade}
           {student.section ? ` · ${student.section}` : ""}
         </p>
       )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              tab === t.key
+                ? "bg-blue-900 text-white"
+                : "bg-white text-gray-600 hover:bg-slate-100 border border-gray-200"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
-        <div className="space-y-8 max-w-3xl">
-          {/* Modules */}
-          <section className="bg-white rounded-md shadow-sm p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              Add file to Share
-            </h2>
+        <>
+          {tab === "modules" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Upload form */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Add file to Share
+                </h2>
 
-            <form
-              onSubmit={handleModuleUpload}
-              className="flex flex-col sm:flex-row gap-3 mb-6"
-            >
-              <input
-                type="text"
-                value={newTopic}
-                onChange={(e) => setNewTopic(e.target.value)}
-                placeholder="Topic name (e.g. Topic 1)"
-                className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
-              />
-              <input
-                type="file"
-                onChange={(e) => setModuleFile(e.target.files?.[0] || null)}
-                className="text-sm text-gray-600 flex-1"
-              />
-              <button
-                type="submit"
-                disabled={moduleUploading}
-                className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-4 py-2 rounded disabled:opacity-60 whitespace-nowrap"
-              >
-                {moduleUploading ? "Uploading..." : "Add File"}
-              </button>
-            </form>
-            {moduleError && (
-              <p className="text-xs text-red-500 -mt-4 mb-4">{moduleError}</p>
-            )}
-
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Uploaded Files
-            </h3>
-
-            {modules.length === 0 ? (
-              <p className="text-sm text-gray-400">No modules uploaded yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {modules.map((group) => (
-                  <div
-                    key={group.topic}
-                    className="border border-gray-100 rounded-md overflow-hidden"
-                  >
-                    <button
-                      onClick={() => toggleTopic(group.topic)}
-                      className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                <form onSubmit={handleModuleUpload}>
+                  <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                    <select
+                      value={moduleSubject}
+                      onChange={(e) => setModuleSubject(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
                     >
-                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                        <ChevronIcon
-                          className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                            expanded[group.topic] ? "rotate-90" : ""
-                          }`}
-                        />
-                        {group.topic}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {group.files.length} file
-                        {group.files.length !== 1 ? "s" : ""}
-                      </span>
-                    </button>
+                      {SUBJECTS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={newTopic}
+                      onChange={(e) => setNewTopic(e.target.value)}
+                      placeholder="Topic name (e.g. Topic 1)"
+                      className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                    />
+                  </div>
 
-                    {expanded[group.topic] && (
-                      <div className="divide-y divide-gray-50">
-                        {group.files.map((f) => (
-                          <div
-                            key={f._id}
-                            className="flex items-center justify-between px-4 py-2.5"
-                          >
-                            <a
-                              href={`${FILE_BASE}/${f.filePath}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-gray-700 hover:text-blue-700 flex items-center gap-2"
-                            >
-                              <BookIcon className="w-4 h-4 text-gray-400" />
-                              {f.fileName}
-                            </a>
-                            <button
-                              onClick={() => handleDelete(f._id)}
-                              className="text-xs text-red-400 hover:text-red-600"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-rose-200 bg-rose-50/60 hover:bg-rose-50 transition-colors rounded-md py-10 cursor-pointer">
+                    <input
+                      type="file"
+                      onChange={(e) => setModuleFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    <UploadIcon className="w-9 h-9 text-gray-400" />
+                    {moduleFile ? (
+                      <span className="text-sm text-gray-700 font-medium">
+                        {moduleFile.name}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">
+                        Click to choose a file to upload
+                      </span>
                     )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  </label>
 
-          {/* Past Papers */}
-          <section className="bg-white rounded-md shadow-sm p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              Past Papers
-            </h2>
+                  {moduleError && (
+                    <p className="text-xs text-red-500 mt-3">{moduleError}</p>
+                  )}
 
-            <form
-              onSubmit={handlePastPaperUpload}
-              className="flex flex-col sm:flex-row gap-3 mb-6"
-            >
-              <input
-                type="file"
-                onChange={(e) =>
-                  setPastPaperFile(e.target.files?.[0] || null)
-                }
-                className="text-sm text-gray-600 flex-1"
-              />
-              <button
-                type="submit"
-                disabled={pastPaperUploading}
-                className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-4 py-2 rounded disabled:opacity-60 whitespace-nowrap"
-              >
-                {pastPaperUploading ? "Uploading..." : "Add Past Paper"}
-              </button>
-            </form>
-            {pastPaperError && (
-              <p className="text-xs text-red-500 -mt-4 mb-4">
-                {pastPaperError}
-              </p>
-            )}
-
-            {pastPapers.length === 0 ? (
-              <p className="text-sm text-gray-400">No past papers uploaded yet.</p>
-            ) : (
-              <div className="divide-y divide-gray-50 border border-gray-100 rounded-md">
-                {pastPapers.map((f) => (
-                  <div
-                    key={f._id}
-                    className="flex items-center justify-between px-4 py-2.5"
-                  >
-                    <a
-                      href={`${FILE_BASE}/${f.filePath}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-gray-700 hover:text-blue-700 flex items-center gap-2"
-                    >
-                      <PaperclipIcon className="w-4 h-4 text-gray-400" />
-                      {f.fileName}
-                    </a>
+                  <div className="flex justify-end mt-4">
                     <button
-                      onClick={() => handleDelete(f._id)}
-                      className="text-xs text-red-400 hover:text-red-600"
+                      type="submit"
+                      disabled={moduleUploading}
+                      className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
                     >
-                      Delete
+                      {moduleUploading ? "Uploading..." : "Add File"}
                     </button>
                   </div>
-                ))}
+                </form>
               </div>
-            )}
-          </section>
-        </div>
+
+              {/* Uploaded files */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Uploaded Files
+                </h2>
+
+                <div className="space-y-2">
+                  {modules.map((group) => {
+                    const key = `m::${group.subject}`;
+                    const fileCount = group.topics.reduce(
+                      (sum, t) => sum + t.files.length,
+                      0
+                    );
+                    return (
+                      <div key={key} className="rounded-md overflow-hidden">
+                        <button
+                          onClick={() => toggleSubject(key)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors text-left"
+                        >
+                          <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                            <ChevronIcon
+                              className={`w-3.5 h-3.5 text-blue-600 transition-transform ${
+                                openSubject[key] ? "rotate-90" : ""
+                              }`}
+                            />
+                            {group.subject}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {fileCount} file{fileCount !== 1 ? "s" : ""}
+                          </span>
+                        </button>
+
+                        {openSubject[key] && (
+                          <div className="pl-4 pt-2 space-y-1.5">
+                            {group.topics.length === 0 ? (
+                              <p className="text-xs text-gray-400 px-2 py-2">
+                                No modules in this subject yet.
+                              </p>
+                            ) : (
+                              group.topics.map((t) => {
+                                const topicKey = `${key}::${t.topic}`;
+                                return (
+                                  <div key={topicKey} className="rounded-md overflow-hidden">
+                                    <button
+                                      onClick={() => toggleTopic(topicKey)}
+                                      className="w-full flex items-center justify-between px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors text-left"
+                                    >
+                                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                        <ChevronIcon
+                                          className={`w-3.5 h-3.5 text-blue-600 transition-transform ${
+                                            openTopic[topicKey] ? "rotate-90" : ""
+                                          }`}
+                                        />
+                                        {t.topic}
+                                      </span>
+                                      <span className="text-xs text-gray-400">
+                                        {t.files.length} file
+                                        {t.files.length !== 1 ? "s" : ""}
+                                      </span>
+                                    </button>
+
+                                    {openTopic[topicKey] && (
+                                      <div className="pl-4 pt-1.5 space-y-1.5">
+                                        {t.files.map((f) => (
+                                          <div
+                                            key={f._id}
+                                            className="flex items-center justify-between px-3 py-2 bg-gray-100 rounded-md"
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                openAuthenticatedFile(
+                                                  `${API_BASE}/study-modules/${f._id}/file`
+                                                )
+                                              }
+                                              className="text-sm text-blue-700 hover:underline flex items-center gap-2"
+                                            >
+                                              <BookIcon className="w-4 h-4 text-blue-500" />
+                                              {f.fileName}
+                                            </button>
+                                            <button
+                                              onClick={() => handleDelete(f._id)}
+                                              className="text-gray-300 hover:text-red-500 transition-colors"
+                                              aria-label="Delete file"
+                                            >
+                                              <TrashIcon className="w-4 h-4" />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "pastPapers" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Upload form */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Add Past Paper
+                </h2>
+
+                <form onSubmit={handlePastPaperUpload}>
+                  <div className="mb-4">
+                    <select
+                      value={pastPaperSubject}
+                      onChange={(e) => setPastPaperSubject(e.target.value)}
+                      className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                    >
+                      {SUBJECTS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-rose-200 bg-rose-50/60 hover:bg-rose-50 transition-colors rounded-md py-10 cursor-pointer">
+                    <input
+                      type="file"
+                      onChange={(e) =>
+                        setPastPaperFile(e.target.files?.[0] || null)
+                      }
+                      className="hidden"
+                    />
+                    <UploadIcon className="w-9 h-9 text-gray-400" />
+                    {pastPaperFile ? (
+                      <span className="text-sm text-gray-700 font-medium">
+                        {pastPaperFile.name}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">
+                        Click to choose a file to upload
+                      </span>
+                    )}
+                  </label>
+
+                  {pastPaperError && (
+                    <p className="text-xs text-red-500 mt-3">{pastPaperError}</p>
+                  )}
+
+                  <div className="flex justify-end mt-4">
+                    <button
+                      type="submit"
+                      disabled={pastPaperUploading}
+                      className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
+                    >
+                      {pastPaperUploading ? "Uploading..." : "Add Past Paper"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Uploaded files */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Uploaded Files
+                </h2>
+
+                <div className="space-y-2">
+                  {pastPapers.map((group) => {
+                    const key = `p::${group.subject}`;
+                    return (
+                      <div key={key} className="rounded-md overflow-hidden">
+                        <button
+                          onClick={() => toggleSubject(key)}
+                          className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors text-left"
+                        >
+                          <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                            <ChevronIcon
+                              className={`w-3.5 h-3.5 text-blue-600 transition-transform ${
+                                openSubject[key] ? "rotate-90" : ""
+                              }`}
+                            />
+                            {group.subject}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {group.files.length} file
+                            {group.files.length !== 1 ? "s" : ""}
+                          </span>
+                        </button>
+
+                        {openSubject[key] && (
+                          <div className="pl-4 pt-2 space-y-1.5">
+                            {group.files.length === 0 ? (
+                              <p className="text-xs text-gray-400 px-2 py-2">
+                                No past papers in this subject yet.
+                              </p>
+                            ) : (
+                              group.files.map((f) => (
+                                <div
+                                  key={f._id}
+                                  className="flex items-center justify-between px-3 py-2 bg-gray-100 rounded-md"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openAuthenticatedFile(
+                                        `${API_BASE}/study-modules/${f._id}/file`
+                                      )
+                                    }
+                                    className="text-sm text-blue-700 hover:underline flex items-center gap-2"
+                                  >
+                                    <PaperclipIcon className="w-4 h-4 text-blue-500" />
+                                    {f.fileName}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(f._id)}
+                                    className="text-gray-300 hover:text-red-500 transition-colors"
+                                    aria-label="Delete file"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "breakActivities" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Logging form */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Log Break-Time Activity
+                </h2>
+
+                <form onSubmit={submitBreakActivity}>
+                  <div className="flex flex-col gap-2 mb-4">
+                    {breakOptions.map((activity) => (
+                      <label
+                        key={activity}
+                        className="flex items-start gap-2 text-sm text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedBreakActivities.includes(activity)}
+                          onChange={() => toggleBreakActivity(activity)}
+                          className="mt-0.5 rounded border-gray-300"
+                        />
+                        {activity}
+                      </label>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={breakNotes}
+                    onChange={(e) => setBreakNotes(e.target.value)}
+                    placeholder="Additional notes (optional)"
+                    rows={3}
+                    className="w-full text-sm border border-gray-200 rounded-md p-2 mb-4 outline-none focus:border-blue-400"
+                  />
+
+                  {breakStatus && (
+                    <p className="text-xs text-gray-500 mb-3">{breakStatus}</p>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={savingBreak}
+                      className="bg-blue-900 hover:bg-blue-800 transition-colors text-white text-sm font-medium px-5 py-2.5 rounded disabled:opacity-60"
+                    >
+                      {savingBreak ? "Saving..." : "Save Break Activity"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* History */}
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  History
+                </h2>
+
+                {breakHistory.length === 0 ? (
+                  <p className="text-sm text-gray-400">
+                    No break-time activities logged yet.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {breakHistory.map((log) => (
+                      <div
+                        key={log._id}
+                        className="border-b border-gray-50 pb-3 last:border-0 last:pb-0"
+                      >
+                        <p className="text-xs text-gray-400 mb-2">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {log.activities.map((a) => (
+                            <span
+                              key={a}
+                              className="text-xs bg-orange-50 text-orange-700 rounded-full px-3 py-1"
+                            >
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                        {log.notes && (
+                          <p className="text-sm text-gray-600">{log.notes}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </TeacherDashboardLayout>
   );
@@ -423,6 +782,42 @@ function PaperclipIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13"
+      />
+    </svg>
+  );
+}
+
+function UploadIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+      />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
       />
     </svg>
   );

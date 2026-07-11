@@ -5,8 +5,10 @@ import {
   getResources,
   uploadResource,
   deleteResource,
+  downloadResource,
 } from "../controllers/studyModuleController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
+import { documentFileFilter, runUpload } from "../utils/uploadFileFilter.js";
 
 const router = express.Router();
 
@@ -17,7 +19,11 @@ const storage = multer.diskStorage({
     cb(null, `${unique}${path.extname(file.originalname)}`);
   },
 });
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: documentFileFilter,
+});
 
 router.use(protect);
 
@@ -26,12 +32,17 @@ router.get(
   authorizeRoles("shadow_teacher", "child", "parent"),
   getResources
 );
+router.get(
+  "/:id/file",
+  authorizeRoles("shadow_teacher", "child", "parent"),
+  downloadResource
+);
 router.post(
   "/",
-  authorizeRoles("shadow_teacher", "parent"),
-  upload.single("file"),
+  authorizeRoles("shadow_teacher"),
+  runUpload(upload.single("file")),
   uploadResource
 );
-router.delete("/:id", authorizeRoles("shadow_teacher", "parent"), deleteResource);
+router.delete("/:id", authorizeRoles("shadow_teacher"), deleteResource);
 
 export default router;

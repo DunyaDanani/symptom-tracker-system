@@ -34,16 +34,16 @@ export default function AuthCard({
       <div className="relative z-10 w-full max-w-3xl mx-4">
         <div className="relative bg-white rounded-md shadow-2xl overflow-visible">
           {/* Header */}
-          <div className="h-24 bg-gradient-to-r from-sky-500 to-blue-600 rounded-t-md" />
+          <div className="h-16 bg-gradient-to-r from-sky-500 to-blue-600 rounded-t-md" />
 
           {/* Logo */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-10">
-            <div className="w-28 h-28 rounded-full bg-white shadow-lg flex items-center justify-center overflow-hidden border border-gray-100">
+          <div className="absolute left-1/2 -translate-x-1/2 -top-8">
+            <div className="w-32 h-32 rounded-full bg-white shadow-lg flex items-center justify-center overflow-hidden border border-gray-100">
               <Image
                 src="/12.jpg"
                 alt="OKI International School Logo"
-                width={90}
-                height={90}
+                width={104}
+                height={104}
                 priority
                 className="object-contain"
               />

@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AuthCard from "@/components/AuthCard";
+import { API_BASE } from "@/lib/config";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -27,7 +28,7 @@ function ResetPasswordForm() {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/reset-password", {
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, code, newPassword }),

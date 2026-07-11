@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import MiniCalendar from "@/components/MiniCalendar";
 
+import { API_BASE } from "@/lib/config";
 interface Stats {
   totalStudents: number;
   shadowTeacherCount: number;
@@ -20,8 +22,6 @@ interface AttentionStudent {
   flagged: boolean;
   reasons: string[];
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function PrincipalDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -79,7 +79,10 @@ export default function PrincipalDashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center">
+        <Link
+          href="/dashboard/principal/students"
+          className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow"
+        >
           <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
             <UsersIcon className="w-5 h-5" />
           </div>
@@ -87,9 +90,12 @@ export default function PrincipalDashboardPage() {
           <p className="text-3xl font-bold text-gray-800 mt-1">
             {loading ? "—" : stats?.totalStudents ?? "—"}
           </p>
-        </div>
+        </Link>
 
-        <div className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center">
+        <Link
+          href="/dashboard/principal/students/flagged"
+          className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow"
+        >
           <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center mb-3">
             <WarningIcon className="w-5 h-5" />
           </div>
@@ -97,9 +103,12 @@ export default function PrincipalDashboardPage() {
           <p className="text-3xl font-bold text-red-500 mt-1">
             {loading ? "—" : stats?.flaggedCount ?? "—"}
           </p>
-        </div>
+        </Link>
 
-        <div className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center">
+        <Link
+          href="/dashboard/principal/teachers"
+          className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow"
+        >
           <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
             <TeacherIcon className="w-5 h-5" />
           </div>
@@ -107,7 +116,7 @@ export default function PrincipalDashboardPage() {
           <p className="text-3xl font-bold text-blue-600 mt-1">
             {loading ? "—" : stats?.shadowTeacherCount ?? "—"}
           </p>
-        </div>
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -219,3 +228,4 @@ function ChevronIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+ 

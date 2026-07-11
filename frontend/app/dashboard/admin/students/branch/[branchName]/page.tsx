@@ -3,19 +3,19 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
+import BackButton from "@/components/BackButton";
 import {
   GRADE_TAXONOMY,
   UNGROUPED_CATEGORY,
   categoryForGrade,
 } from "@/lib/gradeTaxonomy";
+import { API_BASE } from "@/lib/config";
 
 interface Student {
   _id: string;
   branch: string;
   grade: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function AdminBranchCategoriesPage({
   params,
@@ -65,12 +65,7 @@ export default function AdminBranchCategoriesPage({
 
   return (
     <DashboardLayout>
-      <Link
-        href="/dashboard/admin/students"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Branches
-      </Link>
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         {branch}

@@ -5,7 +5,21 @@ import TeacherProfile from "../models/TeacherProfile.js";
 import { BRANCHES } from "../models/Student.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
 import EmotionCheckin, { EMOJI_SCORES } from "../models/EmotionCheckin.js";
-import { generateUsername, generateTempPassword } from "../utils/credentialUtils.js";
+import BreakActivityLog from "../models/BreakActivityLog.js";
+import {
+  generateStudentCredentials,
+  generateParentCredentials,
+  generateTeacherCredentials,
+} from "../utils/credentialUtils.js";
+import {
+  evaluateThresholds,
+  raiseManualFlagAlert,
+  clearManualFlagAlert,
+} from "../utils/alertEngine.js";
+import { buildActivityPlan } from "../utils/activityPlanEngine.js";
+import { isValidEmail } from "../utils/validators.js";
+import { currentCheckinContext } from "../utils/schoolHours.js";
+import { sendEmail } from "../utils/mailer.js";
 
 // @route   GET /api/students/branches
 // @access  Any authenticated user
@@ -23,6 +37,7 @@ export const getBranches = (req, res) => {
 export const registerStudent = async (req, res) => {
   const {
     branch,
+    admissionNumber,
     firstName,
     lastName,
     dateOfBirth,
@@ -44,6 +59,7 @@ export const registerStudent = async (req, res) => {
   try {
     if (
       !branch ||
+      !admissionNumber ||
       !firstName ||
       !lastName ||
       !dateOfBirth ||
@@ -60,6 +76,13 @@ export const registerStudent = async (req, res) => {
       });
     }
 
+    if (!isValidEmail(parentEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid parent email address",
+      });
+    }
+
     if (!BRANCHES.includes(branch)) {
       return res.status(400).json({
         success: false,
@@ -67,11 +90,22 @@ export const registerStudent = async (req, res) => {
       });
     }
 
+    const existingAdmissionNumber = await Student.findOne({
+      admissionNumber: admissionNumber.trim(),
+    });
+    if (existingAdmissionNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "A student with this admission number already exists",
+      });
+    }
+
     const credentials = {};
 
-    // 1. Create the student's login account
-    const studentUsername = await generateUsername(firstName, lastName, User);
-    const studentTempPassword = generateTempPassword();
+    // 1. Create the student's login account — username = admission number,
+    // password = same, so it's short and easy for a child to use.
+    const { username: studentUsername, password: studentTempPassword } =
+      await generateStudentCredentials(admissionNumber, User);
     const studentHashedPassword = await bcrypt.hash(studentTempPassword, 10);
 
     const studentUser = new User({
@@ -87,9 +121,10 @@ export const registerStudent = async (req, res) => {
       password: studentTempPassword,
     };
 
-    // 2. Create the parent's login account
-    const parentUsername = await generateUsername(parentFirstName, lastName, User);
-    const parentTempPassword = generateTempPassword();
+    // 2. Create the parent's login account — username = first name + last
+    // 3 digits of their phone number, password = same.
+    const { username: parentUsername, password: parentTempPassword } =
+      await generateParentCredentials(parentFirstName, parentPhone, User);
     const parentHashedPassword = await bcrypt.hash(parentTempPassword, 10);
 
     const parentUser = new User({
@@ -125,19 +160,39 @@ export const registerStudent = async (req, res) => {
       assignedTeacher = teacher._id;
       status = "assigned";
     } else if (newTeacher && newTeacher.name) {
-      const teacherUsername = await generateUsername(
-        newTeacher.name.split(" ")[0] || "teacher",
-        newTeacher.name.split(" ")[1] || "user",
-        User
-      );
-      const teacherTempPassword = generateTempPassword();
+      // Username = teacher's first name + last 3 digits of this student's
+      // admission number, password = same.
+      const { username: teacherUsername, password: teacherTempPassword } =
+        await generateTeacherCredentials(newTeacher.name, admissionNumber, User);
       const teacherHashedPassword = await bcrypt.hash(teacherTempPassword, 10);
+
+      const trimmedTeacherEmail = newTeacher.email
+        ? newTeacher.email.trim().toLowerCase()
+        : "";
+      if (trimmedTeacherEmail && !isValidEmail(trimmedTeacherEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address for the shadow teacher",
+        });
+      }
+      if (trimmedTeacherEmail) {
+        const existingTeacherEmail = await User.findOne({
+          email: trimmedTeacherEmail,
+        });
+        if (existingTeacherEmail) {
+          return res.status(400).json({
+            success: false,
+            message: "That teacher email is already linked to another account",
+          });
+        }
+      }
 
       const teacherUser = new User({
         username: teacherUsername,
         password: teacherHashedPassword,
         role: "shadow_teacher",
         name: newTeacher.name,
+        email: trimmedTeacherEmail || null,
       });
       await teacherUser.save();
 
@@ -156,11 +211,34 @@ export const registerStudent = async (req, res) => {
         username: teacherUsername,
         password: teacherTempPassword,
       };
+
+      if (trimmedTeacherEmail) {
+        try {
+          await sendEmail({
+            to: trimmedTeacherEmail,
+            subject: "Your OKI International School shadow teacher account",
+            html: `
+              <p>Hello ${newTeacher.name},</p>
+              <p>A Shadow Teacher account has been created for you. Here are your login credentials:</p>
+              <p>
+                Username: ${teacherUsername}<br/>
+                Password: ${teacherTempPassword}
+              </p>
+              <p>Please log in and change your password when convenient.</p>
+            `,
+          });
+          credentials.teacher.emailSent = true;
+        } catch (emailError) {
+          console.error("Failed to email teacher credentials:", emailError);
+          credentials.teacher.emailSent = false;
+        }
+      }
     }
 
     // 4. Create the Student profile linking everything together
     const student = new Student({
       branch,
+      admissionNumber: admissionNumber.trim(),
       firstName,
       lastName,
       dateOfBirth,
@@ -183,11 +261,42 @@ export const registerStudent = async (req, res) => {
 
     await student.save();
 
+    // Email the parent their login credentials. Admission must still
+    // succeed even if SMTP isn't reachable/configured — we report back
+    // whether the send actually worked so the frontend can show accurate
+    // copy instead of unconditionally claiming "credentials sent".
+    let emailSent = false;
+    try {
+      await sendEmail({
+        to: parentEmail,
+        subject: "Your OKI International School account",
+        html: `
+          <p>Hello ${parentFirstName},</p>
+          <p>${firstName} ${lastName} has been admitted successfully. Here are your login credentials:</p>
+          <p>
+            <strong>Parent login</strong><br/>
+            Username: ${credentials.parent.username}<br/>
+            Password: ${credentials.parent.password}
+          </p>
+          <p>
+            <strong>Student login</strong><br/>
+            Username: ${credentials.student.username}<br/>
+            Password: ${credentials.student.password}
+          </p>
+          <p>Please log in and change these passwords when convenient.</p>
+        `,
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error("Failed to email admission credentials:", emailError);
+    }
+
     res.status(201).json({
       success: true,
       message: "Student registered successfully",
       student,
       credentials,
+      emailSent,
     });
   } catch (error) {
     console.error(error);
@@ -228,7 +337,7 @@ export const getAllStudents = async (req, res) => {
 export const getAvailableTeachers = async (req, res) => {
   try {
     const teachers = await User.find({ role: "shadow_teacher" }).select(
-      "name username"
+      "name username email"
     );
 
     const teacherIds = teachers.map((t) => t._id);
@@ -245,6 +354,7 @@ export const getAvailableTeachers = async (req, res) => {
       _id: t._id,
       name: t.name,
       username: t.username,
+      email: t.email || null,
       qualification: profileMap[t._id.toString()]?.qualification || "",
       specialization: profileMap[t._id.toString()]?.specialization || "",
       experienceYears: profileMap[t._id.toString()]?.experienceYears || 0,
@@ -254,6 +364,86 @@ export const getAvailableTeachers = async (req, res) => {
     res.json({
       success: true,
       teachers: merged,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   PATCH /api/students/teachers/:id
+// @access  Admin only
+// Lets admin edit an existing shadow teacher's account (name, email) and
+// profile (qualification, specialization, experienceYears, age) after
+// creation — mirrors updatePrincipal in staffController.js.
+// Body: { name?, email?, qualification?, specialization?, experienceYears?, age? }
+export const updateTeacherAccount = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, qualification, specialization, experienceYears, age } =
+    req.body;
+
+  try {
+    const teacher = await User.findOne({ _id: id, role: "shadow_teacher" });
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        message: "Shadow teacher not found",
+      });
+    }
+
+    if (typeof email === "string") {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (trimmedEmail) {
+        if (!isValidEmail(trimmedEmail)) {
+          return res.status(400).json({
+            success: false,
+            message: "Please provide a valid email address",
+          });
+        }
+        const existingEmail = await User.findOne({
+          email: trimmedEmail,
+          _id: { $ne: id },
+        });
+        if (existingEmail) {
+          return res.status(400).json({
+            success: false,
+            message: "That email is already linked to another account",
+          });
+        }
+      }
+      teacher.email = trimmedEmail || null;
+    }
+
+    if (name && name.trim()) teacher.name = name.trim();
+    await teacher.save();
+
+    let profile = await TeacherProfile.findOne({ user: teacher._id });
+    if (!profile) {
+      profile = new TeacherProfile({ user: teacher._id });
+    }
+    if (qualification !== undefined) profile.qualification = qualification;
+    if (specialization !== undefined) profile.specialization = specialization;
+    if (experienceYears !== undefined)
+      profile.experienceYears = Number(experienceYears) || 0;
+    if (age !== undefined) profile.age = age === "" ? null : Number(age);
+    await profile.save();
+
+    res.json({
+      success: true,
+      message: "Teacher updated",
+      teacher: {
+        _id: teacher._id,
+        name: teacher.name,
+        username: teacher.username,
+        email: teacher.email,
+        qualification: profile.qualification,
+        specialization: profile.specialization,
+        experienceYears: profile.experienceYears,
+        age: profile.age,
+      },
     });
   } catch (error) {
     console.error(error);
@@ -370,20 +560,92 @@ export const submitChildEmotionCheckin = async (req, res) => {
       createdAt: { $gte: startOfDay, $lte: endOfDay },
     });
 
+    // Tag whichever check-in this touches with the context it was
+    // submitted in — a same-day resubmission (e.g. child updates their
+    // mood again in the evening) shifts the tag to "home" too, since
+    // that's the more recent, more relevant context for the activity plan.
+    const context = currentCheckinContext();
+
     if (checkin) {
       checkin.childEmoji = emoji;
+      checkin.context = context;
       await checkin.save();
     } else {
       checkin = await EmotionCheckin.create({
         student: student._id,
         teacher: student.assignedTeacher,
         childEmoji: emoji,
+        context,
       });
     }
+
+    // FR-10: re-check alert thresholds now that the composite score may
+    // have changed.
+    await evaluateThresholds(student._id);
 
     res.json({
       success: true,
       checkin,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   GET /api/students/activity-plan
+// @access  Child only
+// FR-09/FR-12: builds today's personalised, icon-based activity plan from
+// the child's own composite emotion score (once either side has checked
+// in) and today's logged symptoms. Deterministic rules engine — see
+// utils/activityPlanEngine.js — rather than a trained model. Works
+// whenever the child opens this page, school hours or not — the plan is
+// always computed live from whatever's been logged today so far, there's
+// no time gate anywhere in this flow.
+export const getMyActivityPlan = async (req, res) => {
+  try {
+    const student = await Student.findOne({ studentUser: req.user.id });
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student profile not found",
+      });
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const [checkin, symptomLogs] = await Promise.all([
+      EmotionCheckin.findOne({
+        student: student._id,
+        createdAt: { $gte: startOfDay, $lte: endOfDay },
+      }),
+      SymptomLog.find({
+        student: student._id,
+        createdAt: { $gte: startOfDay, $lte: endOfDay },
+      }).select("symptoms"),
+    ]);
+
+    const score = checkin?.compositeScore ?? null;
+    const symptoms = symptomLogs.flatMap((log) => log.symptoms);
+
+    const plan = buildActivityPlan(score, symptoms);
+
+    // Prefer the tag already saved on today's check-in (set the moment the
+    // child submitted); fall back to "right now" if they haven't checked
+    // in yet today but are still browsing the activity plan.
+    const context = checkin?.context || currentCheckinContext();
+
+    res.json({
+      success: true,
+      band: plan.band,
+      context,
+      cards: plan.cards,
     });
   } catch (error) {
     console.error(error);
@@ -432,6 +694,23 @@ export const getStudentHistory = async (req, res) => {
       });
     }
 
+    if (
+      req.user.role === "child" &&
+      student.studentUser?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This is not your profile",
+      });
+    }
+
+    if (req.user.role === "principal" && student.branch !== req.user.branch) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not in your branch",
+      });
+    }
+
     const [symptomLogs, emotionCheckins] = await Promise.all([
       SymptomLog.find({ student: studentId }).sort({ createdAt: -1 }),
       EmotionCheckin.find({ student: studentId }).sort({ createdAt: -1 }),
@@ -441,6 +720,60 @@ export const getStudentHistory = async (req, res) => {
       success: true,
       symptomLogs,
       emotionCheckins,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   GET /api/students/:studentId/break-activities
+// @access  Admin, Principal (any student), Parent (own child), Shadow
+// Teacher (assigned student). Client meeting 20 Feb 2026: lets parents see
+// what their child did during break time within the school day.
+export const getBreakActivities = async (req, res) => {
+  const { studentId } = req.params;
+
+  try {
+    const student = await Student.findById(studentId);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    if (
+      req.user.role === "parent" &&
+      student.parentUser?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not linked to your account",
+      });
+    }
+
+    if (
+      req.user.role === "shadow_teacher" &&
+      student.assignedTeacher?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not assigned to you",
+      });
+    }
+
+    const logs = await BreakActivityLog.find({ student: studentId }).sort({
+      createdAt: -1,
+    });
+
+    res.json({
+      success: true,
+      logs,
     });
   } catch (error) {
     console.error(error);
@@ -490,6 +823,23 @@ export const getStudentProfile = async (req, res) => {
       });
     }
 
+    if (
+      req.user.role === "child" &&
+      student.studentUser?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This is not your profile",
+      });
+    }
+
+    if (req.user.role === "principal" && student.branch !== req.user.branch) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not in your branch",
+      });
+    }
+
     res.json({
       success: true,
       student,
@@ -531,15 +881,58 @@ export const getMyChild = async (req, res) => {
   }
 };
 
-// @route   GET /api/students/:studentId/symptom-trends?range=weekly|monthly
+// @route   GET /api/students/linked
+// @access  Parent or Child
+// Resolves "my linked student record" regardless of which side of the
+// relationship is calling — the parent (via parentUser) or the child
+// themself (via studentUser). Lets dashboard pages shared between the two
+// roles fetch through one endpoint instead of branching on role.
+export const getLinkedStudent = async (req, res) => {
+  try {
+    const filter =
+      req.user.role === "child"
+        ? { studentUser: req.user.id }
+        : { parentUser: req.user.id };
+
+    const student = await Student.findOne(filter)
+      .populate("assignedTeacher", "name username")
+      .populate("parentUser", "name username")
+      .populate("studentUser", "name username");
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "No linked student profile found",
+      });
+    }
+
+    res.json({
+      success: true,
+      student,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   GET /api/students/:studentId/symptom-trends?range=weekly|monthly|quarterly
 // @access  Child (own only), Parent (own child only), Shadow Teacher
-// (assigned only), Admin/Principal (any student).
+// (assigned only), Class Teacher (own branch only), Admin/Principal
+// (any student).
 // Returns a bucketed count of symptoms checked over time for the Reports
 // chart. "weekly" = one bucket per day for the last 7 days. "monthly" =
-// one bucket per week for the last ~5 weeks.
+// one bucket per week for the last ~5 weeks. "quarterly" = one bucket per
+// month for the last ~3 months — client meeting 20 Feb 2026's "3-Month
+// Final Conclusion Report".
 export const getSymptomTrends = async (req, res) => {
   const { studentId } = req.params;
-  const range = req.query.range === "monthly" ? "monthly" : "weekly";
+  const range = ["monthly", "quarterly"].includes(req.query.range)
+    ? req.query.range
+    : "weekly";
 
   try {
     const student = await Student.findById(studentId);
@@ -556,7 +949,10 @@ export const getSymptomTrends = async (req, res) => {
       (req.user.role === "parent" &&
         student.parentUser?.toString() !== req.user.id) ||
       (req.user.role === "shadow_teacher" &&
-        student.assignedTeacher?.toString() !== req.user.id)
+        student.assignedTeacher?.toString() !== req.user.id) ||
+      (req.user.role === "class_teacher" &&
+        student.branch !== req.user.branch) ||
+      (req.user.role === "principal" && student.branch !== req.user.branch)
     ) {
       return res.status(403).json({
         success: false,
@@ -565,34 +961,62 @@ export const getSymptomTrends = async (req, res) => {
     }
 
     const now = new Date();
-    const bucketCount = range === "monthly" ? 5 : 7;
+    const bucketCount =
+      range === "quarterly" ? 3 : range === "monthly" ? 5 : 7;
+    // "quarterly" buckets by calendar month rather than a fixed day count,
+    // so each bucket cleanly represents "this month / last month / the
+    // month before" for the final conclusion report.
     const bucketSizeDays = range === "monthly" ? 7 : 1;
 
     const rangeStart = new Date(now);
     rangeStart.setHours(0, 0, 0, 0);
-    rangeStart.setDate(rangeStart.getDate() - bucketCount * bucketSizeDays + 1);
+    if (range === "quarterly") {
+      rangeStart.setDate(1);
+      rangeStart.setMonth(rangeStart.getMonth() - (bucketCount - 1));
+    } else {
+      rangeStart.setDate(
+        rangeStart.getDate() - bucketCount * bucketSizeDays + 1
+      );
+    }
 
     const logs = await SymptomLog.find({
       student: studentId,
       createdAt: { $gte: rangeStart },
     }).select("symptoms createdAt");
 
-    const buckets = Array.from({ length: bucketCount }, (_, i) => {
-      const bucketStart = new Date(rangeStart);
-      bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
-      const bucketEnd = new Date(bucketStart);
-      bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
+    const buckets =
+      range === "quarterly"
+        ? Array.from({ length: bucketCount }, (_, i) => {
+            const bucketStart = new Date(rangeStart);
+            bucketStart.setMonth(bucketStart.getMonth() + i);
+            const bucketEnd = new Date(bucketStart);
+            bucketEnd.setMonth(bucketEnd.getMonth() + 1);
 
-      const label =
-        range === "monthly"
-          ? `${bucketStart.toLocaleDateString("default", {
+            const label = bucketStart.toLocaleDateString("default", {
               month: "short",
-              day: "numeric",
-            })}`
-          : bucketStart.toLocaleDateString("default", { weekday: "short" });
+              year: "numeric",
+            });
 
-      return { label, start: bucketStart, end: bucketEnd, count: 0 };
-    });
+            return { label, start: bucketStart, end: bucketEnd, count: 0 };
+          })
+        : Array.from({ length: bucketCount }, (_, i) => {
+            const bucketStart = new Date(rangeStart);
+            bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
+            const bucketEnd = new Date(bucketStart);
+            bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
+
+            const label =
+              range === "monthly"
+                ? `${bucketStart.toLocaleDateString("default", {
+                    month: "short",
+                    day: "numeric",
+                  })}`
+                : bucketStart.toLocaleDateString("default", {
+                    weekday: "short",
+                  });
+
+            return { label, start: bucketStart, end: bucketEnd, count: 0 };
+          });
 
     for (const log of logs) {
       const bucket = buckets.find(
@@ -636,6 +1060,13 @@ export const adminSetStudentFlag = async (req, res) => {
       });
     }
 
+    // FR-10: manual flags push an alert immediately; unflagging clears it.
+    if (flagged) {
+      await raiseManualFlagAlert(studentId, flagNote);
+    } else {
+      await clearManualFlagAlert(studentId);
+    }
+
     res.json({
       success: true,
       message: flagged ? "Student flagged" : "Flag cleared",
@@ -661,10 +1092,10 @@ export const getAdminSymptomOptions = (req, res) => {
 
 // @route   POST /api/students/:studentId/symptoms
 // @access  Admin only
-// Body: { symptoms: string[], additionalNotes }
+// Body: { symptoms: string[], additionalNotes, medications?, medicationNotes? }
 export const adminCreateSymptomLog = async (req, res) => {
   const { studentId } = req.params;
-  const { symptoms, additionalNotes } = req.body;
+  const { symptoms, additionalNotes, medications, medicationNotes } = req.body;
 
   try {
     if (!symptoms || symptoms.length === 0) {
@@ -687,7 +1118,12 @@ export const adminCreateSymptomLog = async (req, res) => {
       teacher: req.user.id,
       symptoms,
       additionalNotes,
+      medications: (medications || []).filter((m) => m?.name?.trim()),
+      medicationNotes,
     });
+
+    // FR-10: re-check alert thresholds now that a new log exists.
+    await evaluateThresholds(studentId);
 
     res.status(201).json({
       success: true,
@@ -705,10 +1141,10 @@ export const adminCreateSymptomLog = async (req, res) => {
 
 // @route   PUT /api/students/symptoms/:logId
 // @access  Admin only
-// Body: { symptoms: string[], additionalNotes }
+// Body: { symptoms: string[], additionalNotes, medications?, medicationNotes? }
 export const adminUpdateSymptomLog = async (req, res) => {
   const { logId } = req.params;
-  const { symptoms, additionalNotes } = req.body;
+  const { symptoms, additionalNotes, medications, medicationNotes } = req.body;
 
   try {
     if (!symptoms || symptoms.length === 0) {
@@ -720,7 +1156,12 @@ export const adminUpdateSymptomLog = async (req, res) => {
 
     const log = await SymptomLog.findByIdAndUpdate(
       logId,
-      { symptoms, additionalNotes },
+      {
+        symptoms,
+        additionalNotes,
+        medications: (medications || []).filter((m) => m?.name?.trim()),
+        medicationNotes,
+      },
       { new: true, runValidators: true }
     );
 
@@ -802,6 +1243,9 @@ export const adminCreateEmotionCheckin = async (req, res) => {
       childEmoji,
       teacherEmoji,
     });
+
+    // FR-10: re-check alert thresholds now that a new check-in exists.
+    await evaluateThresholds(studentId);
 
     res.status(201).json({
       success: true,

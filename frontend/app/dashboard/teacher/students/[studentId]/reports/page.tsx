@@ -4,7 +4,9 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
+import BackButton from "@/components/BackButton";
 
+import { API_BASE } from "@/lib/config";
 interface StudentSummary {
   _id: string;
   firstName: string;
@@ -12,8 +14,6 @@ interface StudentSummary {
   grade: string;
   section?: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function TeacherStudentReportsPage({
   params,
@@ -95,12 +95,7 @@ export default function TeacherStudentReportsPage({
 
   return (
     <TeacherDashboardLayout>
-      <Link
-        href="/dashboard/teacher/reports"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Reports
-      </Link>
+      <BackButton />
 
       <div className="flex items-center justify-between mt-2 mb-6">
         <div>

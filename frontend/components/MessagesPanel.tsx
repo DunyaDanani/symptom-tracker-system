@@ -15,7 +15,7 @@ export default function MessagesPanel({
   const [tab, setTab] = useState<Tab>(showCompose ? "compose" : "inbox");
 
   const tabs: { key: Tab; label: string }[] = [
-    ...(showCompose ? [{ key: "compose" as Tab, label: "Compose" }] : []),
+    ...(showCompose ? [{ key: "compose" as Tab, label: "Create Message" }] : []),
     { key: "inbox", label: "Inbox" },
     { key: "sent", label: "Sent" },
   ];

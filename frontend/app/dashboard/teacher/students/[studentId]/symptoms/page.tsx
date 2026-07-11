@@ -1,8 +1,9 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
+import BackButton from "@/components/BackButton";
+import { API_BASE } from "@/lib/config";
 
 interface StudentSummary {
   _id: string;
@@ -13,14 +14,20 @@ interface StudentSummary {
   diagnosis: string;
 }
 
+interface MedicationEntry {
+  name: string;
+  dosage?: string;
+  time?: string;
+}
+
 interface SymptomLogEntry {
   _id: string;
   symptoms: string[];
   additionalNotes?: string;
+  medications?: MedicationEntry[];
+  medicationNotes?: string;
   createdAt: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function TeacherSymptomTrackingPage({
   params,
@@ -33,6 +40,8 @@ export default function TeacherSymptomTrackingPage({
   const [symptomOptions, setSymptomOptions] = useState<string[]>([]);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [medications, setMedications] = useState<MedicationEntry[]>([]);
+  const [medicationNotes, setMedicationNotes] = useState("");
   const [history, setHistory] = useState<SymptomLogEntry[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -103,6 +112,24 @@ export default function TeacherSymptomTrackingPage({
     );
   };
 
+  const addMedicationRow = () => {
+    setMedications((prev) => [...prev, { name: "", dosage: "", time: "" }]);
+  };
+
+  const updateMedicationRow = (
+    index: number,
+    field: keyof MedicationEntry,
+    value: string
+  ) => {
+    setMedications((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m))
+    );
+  };
+
+  const removeMedicationRow = (index: number) => {
+    setMedications((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const submitSymptoms = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("");
@@ -124,6 +151,8 @@ export default function TeacherSymptomTrackingPage({
           studentId,
           symptoms: selectedSymptoms,
           additionalNotes: notes,
+          medications: medications.filter((m) => m.name.trim()),
+          medicationNotes,
         }),
       });
       const data = await res.json();
@@ -131,6 +160,8 @@ export default function TeacherSymptomTrackingPage({
         setStatus("Symptom log saved.");
         setSelectedSymptoms([]);
         setNotes("");
+        setMedications([]);
+        setMedicationNotes("");
         await loadHistory();
       } else {
         setStatus(data.message || "Could not save symptom log.");
@@ -151,12 +182,7 @@ export default function TeacherSymptomTrackingPage({
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
         <>
-          <Link
-            href={`/dashboard/teacher/students/${studentId}`}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            &larr; Back to {student?.firstName}
-          </Link>
+          <BackButton />
 
           <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
             Symptom Tracking
@@ -200,6 +226,68 @@ export default function TeacherSymptomTrackingPage({
                 rows={3}
                 className="w-full text-sm border border-gray-200 rounded-md p-2 mb-4 outline-none focus:border-blue-400"
               />
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-gray-500">
+                    Medication given (optional)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addMedicationRow}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    + Add medication
+                  </button>
+                </div>
+                {medications.map((m, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={m.name}
+                      onChange={(e) =>
+                        updateMedicationRow(i, "name", e.target.value)
+                      }
+                      placeholder="Name"
+                      className="flex-1 text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
+                    />
+                    <input
+                      type="text"
+                      value={m.dosage || ""}
+                      onChange={(e) =>
+                        updateMedicationRow(i, "dosage", e.target.value)
+                      }
+                      placeholder="Dosage"
+                      className="w-24 text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
+                    />
+                    <input
+                      type="text"
+                      value={m.time || ""}
+                      onChange={(e) =>
+                        updateMedicationRow(i, "time", e.target.value)
+                      }
+                      placeholder="Time"
+                      className="w-20 text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeMedicationRow(i)}
+                      className="text-xs text-red-500 hover:underline shrink-0"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                {medications.length > 0 && (
+                  <textarea
+                    value={medicationNotes}
+                    onChange={(e) => setMedicationNotes(e.target.value)}
+                    placeholder="Medication notes (optional)"
+                    rows={2}
+                    className="w-full text-sm border border-gray-200 rounded-md p-2 mt-1 outline-none focus:border-blue-400"
+                  />
+                )}
+              </div>
 
               {status && (
                 <p className="text-xs text-gray-500 mb-3">{status}</p>
@@ -248,6 +336,17 @@ export default function TeacherSymptomTrackingPage({
                           {log.additionalNotes && (
                             <p className="text-xs text-gray-400 mt-1">
                               {log.additionalNotes}
+                            </p>
+                          )}
+                          {log.medications && log.medications.length > 0 && (
+                            <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-1 inline-block">
+                              💊{" "}
+                              {log.medications
+                                .map(
+                                  (m) =>
+                                    `${m.name}${m.dosage ? ` (${m.dosage})` : ""}`
+                                )
+                                .join(", ")}
                             </p>
                           )}
                         </td>

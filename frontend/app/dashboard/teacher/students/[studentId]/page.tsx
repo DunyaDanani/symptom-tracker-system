@@ -3,6 +3,9 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
+import BackButton from "@/components/BackButton";
+import Avatar from "@/components/Avatar";
+import { API_BASE } from "@/lib/config";
 
 interface StudentSummary {
   _id: string;
@@ -14,9 +17,15 @@ interface StudentSummary {
   communicationLevel: string;
   flagged?: boolean;
   flagNote?: string;
+  admissionNumber?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  parentFirstName?: string;
+  parentRelationship?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  homeCity?: string;
 }
-
-const API_BASE = "http://localhost:5000/api";
 
 export default function TeacherStudentHubPage({
   params,
@@ -103,73 +112,179 @@ export default function TeacherStudentHubPage({
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
         <>
-          <h1 className="text-2xl font-semibold text-blue-900 mb-1">
-            {student?.firstName} {student?.lastName}
-          </h1>
-          <p className="text-sm text-gray-500 mb-6">
-            Grade {student?.grade}
-            {student?.section ? ` · ${student.section}` : ""} ·{" "}
-            {student?.diagnosis}
-          </p>
+          <BackButton />
 
-          <div className="bg-white rounded-md shadow-sm p-6 mb-6 max-w-2xl">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-gray-700">
-                Needs Attention Flag
-              </p>
-              {student?.flagged && (
-                <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                  Flagged
-                </span>
-              )}
-            </div>
-            <textarea
-              value={flagNote}
-              onChange={(e) => setFlagNote(e.target.value)}
-              placeholder="Optional note for the principal (e.g. reason for concern)"
-              rows={2}
-              className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 outline-none focus:border-blue-400"
+          <div className="flex items-center gap-4 mt-2 mb-6">
+            <Avatar
+              name={`${student?.firstName || ""} ${student?.lastName || ""}`}
+              size="lg"
             />
-            <button
-              onClick={toggleFlag}
-              disabled={savingFlag}
-              className={`text-sm font-medium px-5 py-2.5 rounded transition-colors disabled:opacity-60 ${
-                student?.flagged
-                  ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  : "bg-red-600 text-white hover:bg-red-700"
-              }`}
-            >
-              {savingFlag
-                ? "Saving..."
-                : student?.flagged
-                ? "Clear Flag"
-                : "Flag for Attention"}
-            </button>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-semibold text-blue-900">
+                  {student?.firstName} {student?.lastName}
+                </h1>
+                {student?.flagged && (
+                  <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                    Flagged
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Grade {student?.grade}
+                {student?.section ? ` · ${student.section}` : ""} ·{" "}
+                {student?.diagnosis}
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
-            <Link
-              href={`/dashboard/teacher/students/${studentId}/symptoms`}
-              className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
-            >
-              <p className="font-semibold text-gray-800">Symptom Tracking</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Log symptoms and view history
-              </p>
-            </Link>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main column */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              <div className="bg-white rounded-md shadow-sm p-6">
+                <h2 className="text-sm font-semibold text-gray-700 mb-4">
+                  Profile
+                </h2>
+                <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+                  <ProfileRow
+                    label="Admission No."
+                    value={student?.admissionNumber || "—"}
+                  />
+                  <ProfileRow
+                    label="Date of Birth"
+                    value={
+                      student?.dateOfBirth
+                        ? new Date(student.dateOfBirth).toLocaleDateString()
+                        : "—"
+                    }
+                  />
+                  <ProfileRow
+                    label="Gender"
+                    value={student?.gender || "—"}
+                    capitalize
+                  />
+                  <ProfileRow
+                    label="Communication"
+                    value={student?.communicationLevel?.replace("-", " ") || "—"}
+                    capitalize
+                  />
+                  <ProfileRow
+                    label="Parent/Guardian"
+                    value={student?.parentFirstName || "—"}
+                  />
+                  <ProfileRow
+                    label="Relationship"
+                    value={student?.parentRelationship || "—"}
+                  />
+                  <ProfileRow
+                    label="Parent Phone"
+                    value={student?.parentPhone || "—"}
+                  />
+                  <ProfileRow
+                    label="Parent Email"
+                    value={student?.parentEmail || "—"}
+                  />
+                  <ProfileRow
+                    label="Home City"
+                    value={student?.homeCity || "—"}
+                  />
+                </dl>
+              </div>
 
-            <Link
-              href={`/dashboard/teacher/students/${studentId}/emotion`}
-              className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
-            >
-              <p className="font-semibold text-gray-800">Emotion Tracker</p>
-              <p className="text-sm text-gray-500 mt-1">
-                Record an emotion check-in and view history
-              </p>
-            </Link>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Link
+                  href={`/dashboard/teacher/students/${studentId}/symptoms`}
+                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <p className="font-semibold text-gray-800">Symptom History</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    View logged symptoms over time
+                  </p>
+                </Link>
+
+                <Link
+                  href={`/dashboard/teacher/students/${studentId}/emotion`}
+                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <p className="font-semibold text-gray-800">Emotion History</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    View emotion check-ins over time
+                  </p>
+                </Link>
+
+                <Link
+                  href={`/dashboard/teacher/students/${studentId}/doctor-documents`}
+                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <p className="font-semibold text-gray-800">
+                    Doctor&apos;s Recommendation
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    View uploaded documents and review status
+                  </p>
+                </Link>
+              </div>
+            </div>
+
+            {/* Sidebar column */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-md shadow-sm p-6 lg:sticky lg:top-6">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-gray-700">
+                    Needs Attention Flag
+                  </p>
+                  {student?.flagged && (
+                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                      Flagged
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={flagNote}
+                  onChange={(e) => setFlagNote(e.target.value)}
+                  placeholder="Optional note for the principal (e.g. reason for concern)"
+                  rows={3}
+                  className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 outline-none focus:border-blue-400"
+                />
+                <button
+                  onClick={toggleFlag}
+                  disabled={savingFlag}
+                  className={`w-full text-sm font-medium px-5 py-2.5 rounded transition-colors disabled:opacity-60 ${
+                    student?.flagged
+                      ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      : "bg-red-600 text-white hover:bg-red-700"
+                  }`}
+                >
+                  {savingFlag
+                    ? "Saving..."
+                    : student?.flagged
+                    ? "Clear Flag"
+                    : "Flag for Attention"}
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}
     </TeacherDashboardLayout>
+  );
+}
+
+function ProfileRow({
+  label,
+  value,
+  capitalize,
+}: {
+  label: string;
+  value: string;
+  capitalize?: boolean;
+}) {
+  return (
+    <div className="flex justify-between border-b border-gray-50 pb-2">
+      <dt className="text-gray-500">{label}</dt>
+      <dd className={`text-gray-800 font-medium ${capitalize ? "capitalize" : ""}`}>
+        {value}
+      </dd>
+    </div>
   );
 }

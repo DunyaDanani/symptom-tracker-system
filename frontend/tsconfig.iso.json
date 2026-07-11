@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["app/dashboard/admin/alerts/page.tsx", "components/**/*.tsx", "next-env.d.ts"]
+}

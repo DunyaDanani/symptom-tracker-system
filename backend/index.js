@@ -10,6 +10,8 @@ import principalRoutes from "./routes/principalRoutes.js";
 import staffRoutes from "./routes/staffRoutes.js";
 import messageRoutes from "./routes/messageRoutes.js";
 import studyModuleRoutes from "./routes/studyModuleRoutes.js";
+import doctorDocumentRoutes from "./routes/doctorDocumentRoutes.js";
+import noticeRoutes from "./routes/noticeRoutes.js";
 
 dotenv.config();
 
@@ -21,8 +23,13 @@ app.use(cors());
 
 app.use(express.json());
 
-// Serve uploaded message attachments
-app.use("/uploads", express.static("uploads"));
+// NOTE: uploaded files (doctor documents, study module resources, message
+// attachments) are intentionally NOT served via a static /uploads mount —
+// that would let anyone with a file's URL download it, logged in or not.
+// Each file type instead has its own authenticated download route
+// (GET /api/doctor-documents/:id/file, /api/study-modules/:id/file,
+// /api/messages/:id/attachment) that re-runs the same ownership check as
+// its metadata endpoint before streaming the file.
 
 app.get("/", (req, res) => {
   res.send("🚀 Backend is running...");
@@ -35,6 +42,8 @@ app.use("/api/principal", principalRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/study-modules", studyModuleRoutes);
+app.use("/api/doctor-documents", doctorDocumentRoutes);
+app.use("/api/notices", noticeRoutes);
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

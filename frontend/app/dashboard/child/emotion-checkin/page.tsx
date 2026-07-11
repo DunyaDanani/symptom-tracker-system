@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import ChildDashboardLayout from "@/components/ChildDashboardLayout";
+import Link from "next/link";
+import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
+import BackButton from "@/components/BackButton";
 
-const API_BASE = "http://localhost:5000/api";
+import { API_BASE } from "@/lib/config";
 
 const EMOJI_OPTIONS: { value: string; icon: string; label: string }[] = [
   { value: "very_sad", icon: "😢", label: "Very Sad" },
@@ -14,12 +15,30 @@ const EMOJI_OPTIONS: { value: string; icon: string; label: string }[] = [
   { value: "very_happy", icon: "😄", label: "Very Happy" },
 ];
 
+// Mirrors the school-hours window the backend uses to tag each check-in
+// (backend/utils/schoolHours.js) — kept in sync here purely for copy, so
+// the page reads right whether it's the middle of the school day or the
+// child is checking in from home in the evening. Check-ins work either
+// way; this only changes the wording.
+const SCHOOL_START_HOUR = 8;
+const SCHOOL_END_HOUR = 15;
+
+const isAfterSchoolHours = () => {
+  const hour = new Date().getHours();
+  return hour < SCHOOL_START_HOUR || hour >= SCHOOL_END_HOUR;
+};
+
 export default function ChildEmotionCheckinPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [afterHours, setAfterHours] = useState(false);
+
+  useEffect(() => {
+    setAfterHours(isAfterSchoolHours());
+  }, []);
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -80,18 +99,17 @@ export default function ChildEmotionCheckinPage() {
   };
 
   return (
-    <ChildDashboardLayout>
-      <Link
-        href="/dashboard/child"
-        className="text-xs text-blue-600 hover:underline"
-      >
-        &larr; Back to Dashboard
-      </Link>
+    <FamilyDashboardLayout role="child">
+      <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         Emotion Tracker
       </h1>
-      <p className="text-sm text-gray-500 mb-8">How do you feel today?</p>
+      <p className="text-sm text-gray-500 mb-8">
+        {afterHours
+          ? "School's out — how are you feeling right now?"
+          : "How do you feel today?"}
+      </p>
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
@@ -131,6 +149,7 @@ export default function ChildEmotionCheckinPage() {
           )}
         </div>
       )}
-    </ChildDashboardLayout>
+    </FamilyDashboardLayout>
   );
 }
+         

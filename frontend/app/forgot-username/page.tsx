@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import AuthCard from "@/components/AuthCard";
+import { API_BASE } from "@/lib/config";
 
 export default function ForgotUsernamePage() {
   const [email, setEmail] = useState("");
@@ -16,7 +17,7 @@ export default function ForgotUsernamePage() {
     setMessage("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/forgot-username", {
+      const res = await fetch(`${API_BASE}/auth/forgot-username`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
