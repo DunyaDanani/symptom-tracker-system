@@ -56,9 +56,12 @@ export const generateStudentCredentials = async (admissionNumber, User) => {
 };
 
 // Parent: username = first name + last 3 digits of phone number, password
-// = same.
-export const generateParentCredentials = async (parentFirstName, parentPhone, User) => {
-  const base = `${cleanNamePart(parentFirstName)}${lastDigits(parentPhone, 3)}`;
+// = same. The parent name field now accepts a full name (not just a first
+// name), so only the first word is used here — otherwise usernames would
+// balloon into something like "nadeeshaperera482" instead of "nadeesha482".
+export const generateParentCredentials = async (parentName, parentPhone, User) => {
+  const firstNamePart = (parentName || "").trim().split(/\s+/)[0] || "parent";
+  const base = `${cleanNamePart(firstNamePart)}${lastDigits(parentPhone, 3)}`;
   const username = await ensureUniqueUsername(base, User);
   return { username, password: username };
 };

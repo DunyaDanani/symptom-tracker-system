@@ -188,7 +188,7 @@ export default function TeacherSymptomTrackingPage({
             Symptom Tracking
           </h1>
           <p className="text-sm text-gray-500 mb-8">
-            {student?.firstName} {student?.lastName} · Grade {student?.grade}
+            {student?.firstName} {student?.lastName} · {student?.grade}
             {student?.section ? ` · ${student.section}` : ""}
           </p>
 

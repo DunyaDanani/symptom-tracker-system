@@ -5,11 +5,13 @@ import { useParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import BackButton from "@/components/BackButton";
 import Avatar from "@/components/Avatar";
+import { isValidEmail } from "@/lib/validation";
 
 import { API_BASE } from "@/lib/config";
 
 interface Principal {
   _id: string;
+  title?: string;
   name: string;
   username: string;
   branch: string;
@@ -23,6 +25,7 @@ export default function EditPrincipalPage() {
 
   const [branches, setBranches] = useState<string[]>([]);
   const [principal, setPrincipal] = useState<Principal | null>(null);
+  const [title, setTitle] = useState("");
   const [name, setName] = useState("");
   const [branch, setBranch] = useState("");
   const [email, setEmail] = useState("");
@@ -55,6 +58,7 @@ export default function EditPrincipalPage() {
           );
           if (found) {
             setPrincipal(found);
+            setTitle(found.title || "");
             setName(found.name);
             setBranch(found.branch);
             setEmail(found.email || "");
@@ -85,6 +89,16 @@ export default function EditPrincipalPage() {
       return;
     }
 
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+
+    if (!isValidEmail(email.trim())) {
+      setError("Enter a valid email address (e.g. name@example.com)");
+      return;
+    }
+
     setSaving(true);
     const token = localStorage.getItem("token");
     try {
@@ -94,7 +108,7 @@ export default function EditPrincipalPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, branch, email: email.trim() }),
+        body: JSON.stringify({ title, name, branch, email: email.trim() }),
       });
       const data = await res.json();
 
@@ -156,6 +170,22 @@ export default function EditPrincipalPage() {
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">
+            Title
+          </label>
+          <select
+            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          >
+            <option value="">Select</option>
+            <option value="Mr">Mr</option>
+            <option value="Mrs">Mrs</option>
+            <option value="Ms">Ms</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">
             Full Name
           </label>
           <input
@@ -184,10 +214,11 @@ export default function EditPrincipalPage() {
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">
-            Email <span className="text-gray-400">(optional)</span>
+            Email
           </label>
           <input
             type="email"
+            required
             className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

@@ -82,6 +82,13 @@ const studentSchema = new mongoose.Schema(
     },
 
     // Parent / Guardian details
+    parentTitle: {
+      type: String,
+      enum: ["", "Mr", "Mrs", "Miss"],
+      default: "",
+      trim: true,
+    },
+
     parentFirstName: {
       type: String,
       required: true,

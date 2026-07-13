@@ -20,6 +20,8 @@ import { buildActivityPlan } from "../utils/activityPlanEngine.js";
 import { isValidEmail } from "../utils/validators.js";
 import { currentCheckinContext } from "../utils/schoolHours.js";
 import { sendEmail } from "../utils/mailer.js";
+import { buildReportHtml } from "../utils/reportHtml.js";
+import { renderPdfFromHtml } from "../utils/pdfGenerator.js";
 
 // @route   GET /api/students/branches
 // @access  Any authenticated user
@@ -47,6 +49,7 @@ export const registerStudent = async (req, res) => {
     diagnosis,
     communicationLevel,
     additionalNotes,
+    parentTitle,
     parentFirstName,
     parentRelationship,
     parentEmail,
@@ -169,7 +172,13 @@ export const registerStudent = async (req, res) => {
       const trimmedTeacherEmail = newTeacher.email
         ? newTeacher.email.trim().toLowerCase()
         : "";
-      if (trimmedTeacherEmail && !isValidEmail(trimmedTeacherEmail)) {
+      if (!trimmedTeacherEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "An email address is required for the shadow teacher",
+        });
+      }
+      if (!isValidEmail(trimmedTeacherEmail)) {
         return res.status(400).json({
           success: false,
           message: "Please provide a valid email address for the shadow teacher",
@@ -248,6 +257,7 @@ export const registerStudent = async (req, res) => {
       diagnosis,
       communicationLevel,
       additionalNotes,
+      parentTitle: parentTitle || "",
       parentFirstName,
       parentRelationship,
       parentEmail,
@@ -271,7 +281,7 @@ export const registerStudent = async (req, res) => {
         to: parentEmail,
         subject: "Your OKI International School account",
         html: `
-          <p>Hello ${parentFirstName},</p>
+          <p>Hello ${parentTitle ? `${parentTitle} ` : ""}${parentFirstName},</p>
           <p>${firstName} ${lastName} has been admitted successfully. Here are your login credentials:</p>
           <p>
             <strong>Parent login</strong><br/>
@@ -928,6 +938,75 @@ export const getLinkedStudent = async (req, res) => {
 // one bucket per week for the last ~5 weeks. "quarterly" = one bucket per
 // month for the last ~3 months — client meeting 20 Feb 2026's "3-Month
 // Final Conclusion Report".
+// Shared by getSymptomTrends and getStudentReportPdf — buckets a student's
+// symptom counts over the requested range. Assumes the caller has already
+// verified the student exists and the requester has access to it.
+async function computeTrendBuckets(studentId, range) {
+  const now = new Date();
+  const bucketCount = range === "quarterly" ? 3 : range === "monthly" ? 5 : 7;
+  // "quarterly" buckets by calendar month rather than a fixed day count,
+  // so each bucket cleanly represents "this month / last month / the
+  // month before" for the final conclusion report.
+  const bucketSizeDays = range === "monthly" ? 7 : 1;
+
+  const rangeStart = new Date(now);
+  rangeStart.setHours(0, 0, 0, 0);
+  if (range === "quarterly") {
+    rangeStart.setDate(1);
+    rangeStart.setMonth(rangeStart.getMonth() - (bucketCount - 1));
+  } else {
+    rangeStart.setDate(rangeStart.getDate() - bucketCount * bucketSizeDays + 1);
+  }
+
+  const logs = await SymptomLog.find({
+    student: studentId,
+    createdAt: { $gte: rangeStart },
+  }).select("symptoms createdAt");
+
+  const buckets =
+    range === "quarterly"
+      ? Array.from({ length: bucketCount }, (_, i) => {
+          const bucketStart = new Date(rangeStart);
+          bucketStart.setMonth(bucketStart.getMonth() + i);
+          const bucketEnd = new Date(bucketStart);
+          bucketEnd.setMonth(bucketEnd.getMonth() + 1);
+
+          const label = bucketStart.toLocaleDateString("default", {
+            month: "short",
+            year: "numeric",
+          });
+
+          return { label, start: bucketStart, end: bucketEnd, count: 0 };
+        })
+      : Array.from({ length: bucketCount }, (_, i) => {
+          const bucketStart = new Date(rangeStart);
+          bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
+          const bucketEnd = new Date(bucketStart);
+          bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
+
+          const label =
+            range === "monthly"
+              ? `${bucketStart.toLocaleDateString("default", {
+                  month: "short",
+                  day: "numeric",
+                })}`
+              : bucketStart.toLocaleDateString("default", {
+                  weekday: "short",
+                });
+
+          return { label, start: bucketStart, end: bucketEnd, count: 0 };
+        });
+
+  for (const log of logs) {
+    const bucket = buckets.find(
+      (b) => log.createdAt >= b.start && log.createdAt < b.end
+    );
+    if (bucket) bucket.count += log.symptoms.length;
+  }
+
+  return buckets.map((b) => ({ label: b.label, count: b.count }));
+}
+
 export const getSymptomTrends = async (req, res) => {
   const { studentId } = req.params;
   const range = ["monthly", "quarterly"].includes(req.query.range)
@@ -960,81 +1039,129 @@ export const getSymptomTrends = async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const bucketCount =
-      range === "quarterly" ? 3 : range === "monthly" ? 5 : 7;
-    // "quarterly" buckets by calendar month rather than a fixed day count,
-    // so each bucket cleanly represents "this month / last month / the
-    // month before" for the final conclusion report.
-    const bucketSizeDays = range === "monthly" ? 7 : 1;
-
-    const rangeStart = new Date(now);
-    rangeStart.setHours(0, 0, 0, 0);
-    if (range === "quarterly") {
-      rangeStart.setDate(1);
-      rangeStart.setMonth(rangeStart.getMonth() - (bucketCount - 1));
-    } else {
-      rangeStart.setDate(
-        rangeStart.getDate() - bucketCount * bucketSizeDays + 1
-      );
-    }
-
-    const logs = await SymptomLog.find({
-      student: studentId,
-      createdAt: { $gte: rangeStart },
-    }).select("symptoms createdAt");
-
-    const buckets =
-      range === "quarterly"
-        ? Array.from({ length: bucketCount }, (_, i) => {
-            const bucketStart = new Date(rangeStart);
-            bucketStart.setMonth(bucketStart.getMonth() + i);
-            const bucketEnd = new Date(bucketStart);
-            bucketEnd.setMonth(bucketEnd.getMonth() + 1);
-
-            const label = bucketStart.toLocaleDateString("default", {
-              month: "short",
-              year: "numeric",
-            });
-
-            return { label, start: bucketStart, end: bucketEnd, count: 0 };
-          })
-        : Array.from({ length: bucketCount }, (_, i) => {
-            const bucketStart = new Date(rangeStart);
-            bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
-            const bucketEnd = new Date(bucketStart);
-            bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
-
-            const label =
-              range === "monthly"
-                ? `${bucketStart.toLocaleDateString("default", {
-                    month: "short",
-                    day: "numeric",
-                  })}`
-                : bucketStart.toLocaleDateString("default", {
-                    weekday: "short",
-                  });
-
-            return { label, start: bucketStart, end: bucketEnd, count: 0 };
-          });
-
-    for (const log of logs) {
-      const bucket = buckets.find(
-        (b) => log.createdAt >= b.start && log.createdAt < b.end
-      );
-      if (bucket) bucket.count += log.symptoms.length;
-    }
+    const trend = await computeTrendBuckets(studentId, range);
 
     res.json({
       success: true,
       range,
-      trend: buckets.map((b) => ({ label: b.label, count: b.count })),
+      trend,
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({
       success: false,
       message: "Server Error",
+    });
+  }
+};
+
+// @route   GET /api/students/:studentId/report.pdf?range=weekly|monthly|quarterly
+// @access  Admin, Principal (own branch), Parent (own child), Shadow
+// Teacher (assigned), Child (own profile) — same access rules as
+// getStudentProfile/getStudentHistory. Renders the same data shown on the
+// printable report page as a server-generated PDF (via Puppeteer), so it
+// can be downloaded — or later emailed/scheduled — without depending on
+// the requester's own browser print dialog.
+const REPORT_RANGE_DAYS = { weekly: 7, monthly: 35, quarterly: 92 };
+
+export const getStudentReportPdf = async (req, res) => {
+  const { studentId } = req.params;
+  const range = ["monthly", "quarterly"].includes(req.query.range)
+    ? req.query.range
+    : "weekly";
+
+  try {
+    const student = await Student.findById(studentId)
+      .populate("assignedTeacher", "name username")
+      .populate("parentUser", "name username");
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    if (
+      req.user.role === "parent" &&
+      student.parentUser?._id?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not linked to your account",
+      });
+    }
+
+    if (
+      req.user.role === "shadow_teacher" &&
+      student.assignedTeacher?._id?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not assigned to you",
+      });
+    }
+
+    if (
+      req.user.role === "child" &&
+      student.studentUser?.toString() !== req.user.id
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "This is not your profile",
+      });
+    }
+
+    if (req.user.role === "principal" && student.branch !== req.user.branch) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not in your branch",
+      });
+    }
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - REPORT_RANGE_DAYS[range]);
+
+    const [symptomLogs, emotionCheckins, trend, requester] = await Promise.all([
+      SymptomLog.find({
+        student: studentId,
+        createdAt: { $gte: cutoff },
+      }).sort({ createdAt: -1 }),
+      EmotionCheckin.find({
+        student: studentId,
+        createdAt: { $gte: cutoff },
+      }).sort({ createdAt: -1 }),
+      computeTrendBuckets(studentId, range),
+      User.findById(req.user.id).select("name"),
+    ]);
+
+    const html = buildReportHtml({
+      student,
+      symptomLogs,
+      emotionCheckins,
+      trend,
+      range,
+      generatedBy: requester?.name || "",
+    });
+
+    const pdfBuffer = await renderPdfFromHtml(html);
+
+    const fileName = `${student.firstName}-${student.lastName}-${range}-report.pdf`.replace(
+      /\s+/g,
+      "_"
+    );
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Failed to generate report PDF:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate PDF report",
     });
   }
 };
@@ -1060,6 +1187,7 @@ export const updateStudentProfile = async (req, res) => {
     diagnosis,
     communicationLevel,
     additionalNotes,
+    parentTitle,
     parentFirstName,
     parentRelationship,
     parentEmail,
@@ -1185,6 +1313,16 @@ export const updateStudentProfile = async (req, res) => {
 
     if (additionalNotes !== undefined)
       student.additionalNotes = additionalNotes.trim();
+
+    if (parentTitle !== undefined) {
+      if (parentTitle && !["Mr", "Mrs", "Miss"].includes(parentTitle)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid parent title",
+        });
+      }
+      student.parentTitle = parentTitle || "";
+    }
 
     if (parentFirstName !== undefined) {
       if (!parentFirstName.trim()) {

@@ -14,6 +14,7 @@ import {
   getBreakActivities,
   getStudentProfile,
   getSymptomTrends,
+  getStudentReportPdf,
   adminSetStudentFlag,
   getAdminSymptomOptions,
   adminCreateSymptomLog,
@@ -95,6 +96,14 @@ router.get(
     "principal"
   ),
   getSymptomTrends
+);
+// Server-generated PDF version of the printable report — same access list
+// as /profile and /history since it's the same underlying data.
+router.get(
+  "/:studentId/report.pdf",
+  protect,
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
+  getStudentReportPdf
 );
 
 // All routes below require a valid token AND admin role

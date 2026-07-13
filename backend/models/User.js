@@ -35,6 +35,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Optional honorific shown alongside name (e.g. on the principal
+    // registration form and in emailed credentials). Not meaningful for
+    // every role, so left unset/blank by default.
+    title: {
+      type: String,
+      enum: ["", "Mr", "Mrs", "Ms"],
+      default: "",
+      trim: true,
+    },
+
     // Which branch this user belongs to. Meaningful for "principal" (the
     // branch they manage) and, since the 20 Feb 2026 client meeting, also
     // for "class_teacher" (who sees all students in their branch rather

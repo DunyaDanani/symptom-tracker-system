@@ -20,11 +20,16 @@ interface ResourceFile {
   fileName: string;
   filePath: string;
   createdAt: string;
+  subject?: string;
+  topic?: string;
+  isOwner?: boolean;
+  uploadedByRole?: string;
 }
 
 interface TopicGroup {
   topic: string;
   files: ResourceFile[];
+  submissions: ResourceFile[];
 }
 
 interface ModuleSubjectGroup {
@@ -68,6 +73,15 @@ export default function TeacherUploadModulesWorkspacePage({
   const [openTopic, setOpenTopic] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Inline edit (replace file / rename topic / move subject) for whichever
+  // module or past-paper file is currently being edited.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState<string>(SUBJECTS[0]);
+  const [editTopic, setEditTopic] = useState("");
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
 
   const [moduleSubject, setModuleSubject] = useState<string>(SUBJECTS[0]);
   const [newTopic, setNewTopic] = useState("");
@@ -268,6 +282,54 @@ export default function TeacherUploadModulesWorkspacePage({
     }
   };
 
+  const startEdit = (f: ResourceFile) => {
+    setEditingId(f._id);
+    setEditSubject(f.subject || SUBJECTS[0]);
+    setEditTopic(f.topic || "");
+    setEditFile(null);
+    setEditError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditFile(null);
+    setEditError("");
+  };
+
+  const saveEdit = async (id: string, isModule: boolean) => {
+    if (isModule && !editTopic.trim()) {
+      setEditError("Topic name is required.");
+      return;
+    }
+
+    setSavingEdit(true);
+    setEditError("");
+    try {
+      const formData = new FormData();
+      formData.append("subject", editSubject);
+      if (isModule) formData.append("topic", editTopic.trim());
+      if (editFile) formData.append("file", editFile);
+
+      const res = await fetch(`${API_BASE}/study-modules/${id}`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        cancelEdit();
+        await loadResources();
+      } else {
+        setEditError(data.message || "Could not update this file.");
+      }
+    } catch (err) {
+      console.error("Failed to edit file", err);
+      setEditError("Unable to reach the server.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const toggleBreakActivity = (activity: string) => {
     setSelectedBreakActivities((prev) =>
       prev.includes(activity)
@@ -324,7 +386,7 @@ export default function TeacherUploadModulesWorkspacePage({
       </div>
       {student && (
         <p className="text-sm text-gray-500 mb-6">
-          {student.firstName} {student.lastName} · Grade {student.grade}
+          {student.firstName} {student.lastName} · {student.grade}
           {student.section ? ` · ${student.section}` : ""}
         </p>
       )}
@@ -479,32 +541,100 @@ export default function TeacherUploadModulesWorkspacePage({
 
                                     {openTopic[topicKey] && (
                                       <div className="pl-4 pt-1.5 space-y-1.5">
-                                        {t.files.map((f) => (
-                                          <div
-                                            key={f._id}
-                                            className="flex items-center justify-between px-3 py-2 bg-gray-100 rounded-md"
-                                          >
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                openAuthenticatedFile(
-                                                  `${API_BASE}/study-modules/${f._id}/file`
-                                                )
-                                              }
-                                              className="text-sm text-blue-700 hover:underline flex items-center gap-2"
+                                        {t.files.length === 0 ? (
+                                          <p className="text-xs text-gray-400 px-2 py-2">
+                                            No files uploaded for this topic yet.
+                                          </p>
+                                        ) : (
+                                          t.files.map((f) => (
+                                            <div
+                                              key={f._id}
+                                              className="px-3 py-2 bg-gray-100 rounded-md"
                                             >
-                                              <BookIcon className="w-4 h-4 text-blue-500" />
-                                              {f.fileName}
-                                            </button>
-                                            <button
-                                              onClick={() => handleDelete(f._id)}
-                                              className="text-gray-300 hover:text-red-500 transition-colors"
-                                              aria-label="Delete file"
-                                            >
-                                              <TrashIcon className="w-4 h-4" />
-                                            </button>
-                                          </div>
-                                        ))}
+                                              <div className="flex items-center justify-between gap-2">
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    openAuthenticatedFile(
+                                                      `${API_BASE}/study-modules/${f._id}/file`
+                                                    )
+                                                  }
+                                                  className="text-sm text-blue-700 hover:underline flex items-center gap-2 truncate"
+                                                >
+                                                  <BookIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                                  <span className="truncate">{f.fileName}</span>
+                                                </button>
+                                                {f.isOwner !== false && (
+                                                  <div className="flex items-center gap-2 shrink-0">
+                                                    <button
+                                                      onClick={() => startEdit(f)}
+                                                      className="text-gray-300 hover:text-blue-600 transition-colors"
+                                                      aria-label="Edit file"
+                                                    >
+                                                      <PencilIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                      onClick={() => handleDelete(f._id)}
+                                                      className="text-gray-300 hover:text-red-500 transition-colors"
+                                                      aria-label="Delete file"
+                                                    >
+                                                      <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              {editingId === f._id && (
+                                                <EditFilePanel
+                                                  isModule
+                                                  editSubject={editSubject}
+                                                  setEditSubject={setEditSubject}
+                                                  editTopic={editTopic}
+                                                  setEditTopic={setEditTopic}
+                                                  setEditFile={setEditFile}
+                                                  editError={editError}
+                                                  savingEdit={savingEdit}
+                                                  onCancel={cancelEdit}
+                                                  onSave={() => saveEdit(f._id, true)}
+                                                />
+                                              )}
+                                            </div>
+                                          ))
+                                        )}
+
+                                        <div className="bg-gray-50 rounded-md p-2 mt-2">
+                                          <h4 className="text-xs font-semibold text-gray-500 mb-1.5 px-1">
+                                            Student Submissions
+                                          </h4>
+                                          {t.submissions.length === 0 ? (
+                                            <p className="text-xs text-gray-400 px-1 py-1">
+                                              Nothing submitted for this topic yet.
+                                            </p>
+                                          ) : (
+                                            <div className="space-y-1.5">
+                                              {t.submissions.map((f) => (
+                                                <button
+                                                  type="button"
+                                                  key={f._id}
+                                                  onClick={() =>
+                                                    openAuthenticatedFile(
+                                                      `${API_BASE}/study-modules/${f._id}/file`
+                                                    )
+                                                  }
+                                                  className="flex items-center justify-between w-full px-2 py-1.5 bg-white rounded-md text-left"
+                                                >
+                                                  <span className="text-sm text-blue-700 hover:underline flex items-center gap-2 truncate">
+                                                    <PaperclipIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                                    <span className="truncate">{f.fileName}</span>
+                                                  </span>
+                                                  <span className="text-xs text-gray-400 shrink-0 ml-2">
+                                                    {f.uploadedByRole === "parent" ? "Parent" : "Student"}
+                                                  </span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -619,27 +749,55 @@ export default function TeacherUploadModulesWorkspacePage({
                               group.files.map((f) => (
                                 <div
                                   key={f._id}
-                                  className="flex items-center justify-between px-3 py-2 bg-gray-100 rounded-md"
+                                  className="px-3 py-2 bg-gray-100 rounded-md"
                                 >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      openAuthenticatedFile(
-                                        `${API_BASE}/study-modules/${f._id}/file`
-                                      )
-                                    }
-                                    className="text-sm text-blue-700 hover:underline flex items-center gap-2"
-                                  >
-                                    <PaperclipIcon className="w-4 h-4 text-blue-500" />
-                                    {f.fileName}
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(f._id)}
-                                    className="text-gray-300 hover:text-red-500 transition-colors"
-                                    aria-label="Delete file"
-                                  >
-                                    <TrashIcon className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openAuthenticatedFile(
+                                          `${API_BASE}/study-modules/${f._id}/file`
+                                        )
+                                      }
+                                      className="text-sm text-blue-700 hover:underline flex items-center gap-2 truncate"
+                                    >
+                                      <PaperclipIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                                      <span className="truncate">{f.fileName}</span>
+                                    </button>
+                                    {f.isOwner !== false && (
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                          onClick={() => startEdit(f)}
+                                          className="text-gray-300 hover:text-blue-600 transition-colors"
+                                          aria-label="Edit file"
+                                        >
+                                          <PencilIcon className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(f._id)}
+                                          className="text-gray-300 hover:text-red-500 transition-colors"
+                                          aria-label="Delete file"
+                                        >
+                                          <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {editingId === f._id && (
+                                    <EditFilePanel
+                                      isModule={false}
+                                      editSubject={editSubject}
+                                      setEditSubject={setEditSubject}
+                                      editTopic={editTopic}
+                                      setEditTopic={setEditTopic}
+                                      setEditFile={setEditFile}
+                                      editError={editError}
+                                      savingEdit={savingEdit}
+                                      onCancel={cancelEdit}
+                                      onSave={() => saveEdit(f._id, false)}
+                                    />
+                                  )}
                                 </div>
                               ))
                             )}
@@ -802,6 +960,106 @@ function UploadIcon({ className }: { className?: string }) {
         d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
       />
     </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5l3.75 3.75" />
+    </svg>
+  );
+}
+
+// Shared inline edit panel used by both the Modules and Past Papers file
+// rows above — lets the teacher rename the topic (modules only), move the
+// file to a different subject folder, and/or swap in a replacement file,
+// all in one small form rather than separate dialogs.
+function EditFilePanel({
+  isModule,
+  editSubject,
+  setEditSubject,
+  editTopic,
+  setEditTopic,
+  setEditFile,
+  editError,
+  savingEdit,
+  onCancel,
+  onSave,
+}: {
+  isModule: boolean;
+  editSubject: string;
+  setEditSubject: (v: string) => void;
+  editTopic: string;
+  setEditTopic: (v: string) => void;
+  setEditFile: (f: File | null) => void;
+  editError: string;
+  savingEdit: boolean;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-200 flex flex-col gap-2">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <select
+          value={editSubject}
+          onChange={(e) => setEditSubject(e.target.value)}
+          className="text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+        >
+          {SUBJECTS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        {isModule && (
+          <input
+            type="text"
+            value={editTopic}
+            onChange={(e) => setEditTopic(e.target.value)}
+            placeholder="Topic name"
+            className="flex-1 text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+          />
+        )}
+      </div>
+
+      <input
+        type="file"
+        onChange={(e) => setEditFile(e.target.files?.[0] || null)}
+        className="text-xs"
+      />
+
+      {editError && <p className="text-xs text-red-500">{editError}</p>}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={savingEdit}
+          className="bg-blue-900 hover:bg-blue-800 text-white text-xs font-medium px-3 py-1.5 rounded disabled:opacity-60"
+        >
+          {savingEdit ? "Saving..." : "Save Changes"}
+        </button>
+      </div>
+    </div>
   );
 }
 

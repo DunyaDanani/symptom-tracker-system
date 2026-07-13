@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
-import SecureContentGate from "@/components/SecureContentGate";
 import BackButton from "@/components/BackButton";
 import { API_BASE } from "@/lib/config";
 
@@ -105,9 +104,7 @@ export default function ParentBreakActivitiesPage() {
         What your child did during break time at school.
       </p>
 
-      <SecureContentGate subject="Break Time Activities">
-        <BreakActivityContent />
-      </SecureContentGate>
+      <BreakActivityContent />
     </FamilyDashboardLayout>
   );
 }

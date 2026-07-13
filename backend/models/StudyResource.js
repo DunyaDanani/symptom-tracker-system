@@ -13,6 +13,9 @@ export const SUBJECTS = [
 // then by "topic" within it (teacher picks the topic name when uploading,
 // matching the mockup's Topic 1/Topic 2 sections). "pastPaper" files are
 // grouped by "subject" folder only (flat list within each folder).
+// "submission" files are the child/parent's completed work handed back to
+// the teacher — grouped by "subject" then "topic" the same way modules are,
+// since a submission always answers a specific topic the teacher assigned.
 //
 // Doctor's recommendation documents used to live here as a third type but
 // now have their own dedicated model (see DoctorDocument.js) with proper
@@ -27,7 +30,7 @@ const studyResourceSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["module", "pastPaper"],
+      enum: ["module", "pastPaper", "submission"],
       required: true,
     },
 
@@ -38,7 +41,8 @@ const studyResourceSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Only used when type === "module".
+    // Used when type === "module" or "submission" — which topic within the
+    // subject this file belongs to / answers.
     topic: {
       type: String,
       trim: true,

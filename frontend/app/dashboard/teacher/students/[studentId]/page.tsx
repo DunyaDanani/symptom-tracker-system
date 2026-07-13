@@ -131,7 +131,7 @@ export default function TeacherStudentHubPage({
                 )}
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                Grade {student?.grade}
+                {student?.grade}
                 {student?.section ? ` · ${student.section}` : ""} ·{" "}
                 {student?.diagnosis}
               </p>
@@ -185,7 +185,7 @@ export default function TeacherStudentHubPage({
                     value={student?.parentEmail || "—"}
                   />
                   <ProfileRow
-                    label="Home City"
+                    label="Address"
                     value={student?.homeCity || "—"}
                   />
                 </dl>

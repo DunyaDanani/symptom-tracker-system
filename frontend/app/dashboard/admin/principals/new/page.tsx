@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import BackButton from "@/components/BackButton";
+import { isValidEmail } from "@/lib/validation";
 
 import { API_BASE } from "@/lib/config";
 interface Credentials {
@@ -14,6 +15,7 @@ interface Credentials {
 export default function CreatePrincipalPage() {
   const router = useRouter();
   const [branches, setBranches] = useState<string[]>([]);
+  const [title, setTitle] = useState("");
   const [name, setName] = useState("");
   const [branch, setBranch] = useState("");
   const [email, setEmail] = useState("");
@@ -52,6 +54,16 @@ export default function CreatePrincipalPage() {
       return;
     }
 
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+
+    if (!isValidEmail(email.trim())) {
+      setError("Enter a valid email address (e.g. name@example.com)");
+      return;
+    }
+
     setSubmitting(true);
     const token = localStorage.getItem("token");
 
@@ -62,7 +74,7 @@ export default function CreatePrincipalPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ name, branch, email: email.trim() }),
+        body: JSON.stringify({ title, name, branch, email: email.trim() }),
       });
       const data = await res.json();
 
@@ -84,6 +96,7 @@ export default function CreatePrincipalPage() {
   };
 
   const resetForm = () => {
+    setTitle("");
     setName("");
     setBranch(branches[0] || "");
     setEmail("");
@@ -102,7 +115,8 @@ export default function CreatePrincipalPage() {
 
           <div className="bg-white rounded-md shadow-sm p-6">
             <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded p-4 mb-6">
-              Principal account for {name} ({branch}) created successfully.
+              Principal account for {title ? `${title} ` : ""}
+              {name} ({branch}) created successfully.
               {email.trim() && (
                 <>
                   {" "}
@@ -165,6 +179,20 @@ export default function CreatePrincipalPage() {
           {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
           <label className="block text-xs font-medium text-gray-500 mb-1">
+            Title
+          </label>
+          <select
+            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-4 outline-none focus:border-sky-400"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          >
+            <option value="">Select</option>
+            <option value="Mr">Mr</option>
+            <option value="Mrs">Mrs</option>
+            <option value="Ms">Ms</option>
+          </select>
+
+          <label className="block text-xs font-medium text-gray-500 mb-1">
             Full Name
           </label>
           <input
@@ -190,10 +218,11 @@ export default function CreatePrincipalPage() {
           </select>
 
           <label className="block text-xs font-medium text-gray-500 mb-1">
-            Email <span className="text-gray-400">(optional)</span>
+            Email
           </label>
           <input
             type="email"
+            required
             className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-1 outline-none focus:border-sky-400"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

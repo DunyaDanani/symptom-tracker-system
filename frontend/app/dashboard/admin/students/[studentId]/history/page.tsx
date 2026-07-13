@@ -54,6 +54,7 @@ interface StudentRecord {
   diagnosis: string;
   communicationLevel: string;
   additionalNotes?: string;
+  parentTitle?: string;
   parentFirstName: string;
   parentRelationship?: string;
   parentEmail: string;
@@ -75,6 +76,7 @@ type ProfileForm = {
   diagnosis: string;
   communicationLevel: string;
   additionalNotes: string;
+  parentTitle: string;
   parentFirstName: string;
   parentRelationship: string;
   parentEmail: string;
@@ -94,6 +96,7 @@ const blankProfileForm: ProfileForm = {
   diagnosis: "",
   communicationLevel: "non-verbal",
   additionalNotes: "",
+  parentTitle: "",
   parentFirstName: "",
   parentRelationship: "",
   parentEmail: "",
@@ -113,6 +116,7 @@ const profileFromStudent = (s: StudentRecord): ProfileForm => ({
   diagnosis: s.diagnosis || "",
   communicationLevel: s.communicationLevel || "non-verbal",
   additionalNotes: s.additionalNotes || "",
+  parentTitle: s.parentTitle || "",
   parentFirstName: s.parentFirstName || "",
   parentRelationship: s.parentRelationship || "",
   parentEmail: s.parentEmail || "",
@@ -678,7 +682,7 @@ export default function AdminStudentHistoryPage({
                       <option value="verbal">Verbal</option>
                     </select>
                   </ProfileField>
-                  <ProfileField label="Home City">
+                  <ProfileField label="Address">
                     <input
                       className="profile-input"
                       value={profileForm.homeCity}
@@ -704,6 +708,20 @@ export default function AdminStudentHistoryPage({
                   PARENT / GUARDIAN
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ProfileField label="Title">
+                    <select
+                      className="profile-input"
+                      value={profileForm.parentTitle}
+                      onChange={(e) =>
+                        updateProfileField("parentTitle", e.target.value)
+                      }
+                    >
+                      <option value="">Select</option>
+                      <option value="Mr">Mr</option>
+                      <option value="Mrs">Mrs</option>
+                      <option value="Miss">Miss</option>
+                    </select>
+                  </ProfileField>
                   <ProfileField label="Parent Name">
                     <input
                       className="profile-input"
@@ -816,12 +834,16 @@ export default function AdminStudentHistoryPage({
                   value={studentRecord.communicationLevel}
                 />
                 <InfoRow
-                  label="Home City"
+                  label="Address"
                   value={studentRecord.homeCity || "—"}
                 />
                 <InfoRow
                   label="Parent"
-                  value={`${studentRecord.parentFirstName}${
+                  value={`${
+                    studentRecord.parentTitle
+                      ? `${studentRecord.parentTitle} `
+                      : ""
+                  }${studentRecord.parentFirstName}${
                     studentRecord.parentRelationship
                       ? ` (${studentRecord.parentRelationship})`
                       : ""

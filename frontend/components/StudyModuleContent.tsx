@@ -13,7 +13,9 @@ import { API_BASE } from "@/lib/config";
 // — resolved through the unified /api/students/linked endpoint so the
 // same component works for either role's token. `role` determines which
 // dashboard's URL tree the subject cards link into
-// (/dashboard/<role>/study-module/modules/<subject>, etc).
+// (/dashboard/<role>/study-module/modules/<subject>, etc). Submissions
+// aren't listed here — they live under each topic on the subject/module
+// page instead, right next to the module files they answer.
 export default function StudyModuleContent({
   role,
 }: {

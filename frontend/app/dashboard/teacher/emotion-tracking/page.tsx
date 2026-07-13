@@ -75,7 +75,7 @@ export default function TeacherEmotionTrackingListPage() {
                 {s.firstName} {s.lastName}
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                Grade {s.grade}
+                {s.grade}
                 {s.section ? ` · ${s.section}` : ""}
               </p>
               <p className="text-xs text-gray-400 mt-2">{s.diagnosis}</p>

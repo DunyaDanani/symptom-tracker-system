@@ -168,7 +168,7 @@ export default function AdminDocReviewsPage() {
                     {doc.student
                       ? `${doc.student.firstName} ${doc.student.lastName}`
                       : "Unknown student"}
-                    {doc.student?.grade ? ` — Grade ${doc.student.grade}` : ""}
+                    {doc.student?.grade ? ` — ${doc.student.grade}` : ""}
                   </p>
                   {doc.student?.branch && (
                     <p className="text-xs text-gray-400">{doc.student.branch}</p>

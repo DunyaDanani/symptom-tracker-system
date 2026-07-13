@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import { GRADE_TAXONOMY, getCategory } from "@/lib/gradeTaxonomy";
 import { isValidEmail } from "@/lib/validation";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL_CODE } from "@/lib/countryCodes";
@@ -32,7 +31,7 @@ const REQUIRED_LABELS: Record<string, string> = {
   gender: "Gender",
   grade: "Grade / Class",
   diagnosis: "Primary diagnosis",
-  parentFirstName: "Parent First Name",
+  parentFirstName: "Parent Name",
   parentRelationship: "Relationship",
   parentEmail: "Parent Email",
   parentPhone: "Parent Phone",
@@ -71,6 +70,7 @@ export default function AdmitStudentPage() {
     diagnosis: "",
     communicationLevel: "non-verbal",
     additionalNotes: "",
+    parentTitle: "",
     parentFirstName: "",
     parentRelationship: "",
     parentEmail: "",
@@ -176,9 +176,18 @@ export default function AdmitStudentPage() {
     if (stepNum === 3) {
       // Assigning an existing teacher or skipping entirely is fine — this
       // only fires if the "Add new shadow teacher" panel is open and left
-      // incomplete, so someone can't half-fill it and move on.
-      if (showAddTeacher && !form.newTeacher.name.trim()) {
-        errors.newTeacherName = "Teacher name is required";
+      // incomplete, so someone can't half-fill it and move on. Email is
+      // required (not optional) for a newly created teacher, since it's
+      // how their login credentials actually get sent to them.
+      if (showAddTeacher) {
+        if (!form.newTeacher.name.trim()) {
+          errors.newTeacherName = "Teacher name is required";
+        }
+        if (!form.newTeacher.email.trim()) {
+          errors.newTeacherEmail = "Email is required";
+        } else if (!isValidEmail(form.newTeacher.email)) {
+          errors.newTeacherEmail = "Enter a valid email address";
+        }
       }
     }
 
@@ -207,7 +216,7 @@ export default function AdmitStudentPage() {
       newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     }));
     setFieldErrors((prev) => {
-      const { newTeacherName, ...rest } = prev;
+      const { newTeacherName, newTeacherEmail, ...rest } = prev;
       return rest;
     });
   };
@@ -228,6 +237,12 @@ export default function AdmitStudentPage() {
       setStep(2);
       return;
     }
+    const step3Errors = validateStep(3);
+    if (Object.keys(step3Errors).length > 0) {
+      setFieldErrors(step3Errors);
+      setStep(3);
+      return;
+    }
 
     setFieldErrors({});
     setSubmitting(true);
@@ -246,6 +261,7 @@ export default function AdmitStudentPage() {
       diagnosis: form.diagnosis,
       communicationLevel: form.communicationLevel,
       additionalNotes: form.additionalNotes,
+      parentTitle: form.parentTitle,
       parentFirstName: form.parentFirstName,
       parentRelationship: form.parentRelationship,
       parentEmail: form.parentEmail,
@@ -317,6 +333,7 @@ export default function AdmitStudentPage() {
       diagnosis: "",
       communicationLevel: "non-verbal",
       additionalNotes: "",
+      parentTitle: "",
       parentFirstName: "",
       parentRelationship: "",
       parentEmail: "",
@@ -446,7 +463,6 @@ export default function AdmitStudentPage() {
 
   return (
     <DashboardLayout>
-      <BackButton />
       <div className="max-w-3xl mt-2">
         <h1 className="text-xl font-semibold text-gray-800 mb-2">
           Admit new student
@@ -640,9 +656,22 @@ export default function AdmitStudentPage() {
                 Parent / Guardian Information
               </h2>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="First Name" error={fieldErrors.parentFirstName}>
+                <Field label="Title">
+                  <select
+                    className="input"
+                    value={form.parentTitle}
+                    onChange={(e) => updateField("parentTitle", e.target.value)}
+                  >
+                    <option value="">Select</option>
+                    <option value="Mr">Mr</option>
+                    <option value="Mrs">Mrs</option>
+                    <option value="Miss">Miss</option>
+                  </select>
+                </Field>
+                <Field label="Name" error={fieldErrors.parentFirstName}>
                   <input
                     className={`input ${fieldErrors.parentFirstName ? "input-error" : ""}`}
+                    placeholder="e.g. Nadeesha Perera"
                     value={form.parentFirstName}
                     onChange={(e) => updateField("parentFirstName", e.target.value)}
                   />
@@ -667,10 +696,21 @@ export default function AdmitStudentPage() {
                     onChange={(e) => updateField("parentEmail", e.target.value)}
                   />
                 </Field>
-                <Field label="Phone Number" error={fieldErrors.parentPhone}>
+                <Field
+                  label="Phone Number"
+                  error={fieldErrors.parentPhone}
+                  className="col-span-2"
+                >
                   <div className="flex gap-2">
                     <select
-                      className={`input w-32 shrink-0 truncate ${fieldErrors.parentPhone ? "input-error" : ""}`}
+                      className={`input shrink-0 truncate text-center ${fieldErrors.parentPhone ? "input-error" : ""}`}
+                      style={{
+                        padding: "0.5rem 0.25rem",
+                        width: "3.75rem",
+                        minWidth: "3.75rem",
+                        maxWidth: "3.75rem",
+                        flex: "0 0 3.75rem",
+                      }}
                       value={form.parentPhoneCountry}
                       onChange={(e) =>
                         updateField("parentPhoneCountry", e.target.value)
@@ -684,15 +724,17 @@ export default function AdmitStudentPage() {
                     </select>
                     <input
                       className={`input ${fieldErrors.parentPhone ? "input-error" : ""}`}
+                      style={{ width: "auto", flex: "1 1 0%", minWidth: 0 }}
                       placeholder="e.g. 771234567"
                       value={form.parentPhone}
                       onChange={(e) => updateField("parentPhone", e.target.value)}
                     />
                   </div>
                 </Field>
-                <Field label="Home City">
+                <Field label="Address" className="col-span-2">
                   <input
                     className="input"
+                    placeholder="e.g. 24 Lotus Grove, Colombo"
                     value={form.homeCity}
                     onChange={(e) => updateField("homeCity", e.target.value)}
                   />
@@ -755,7 +797,7 @@ export default function AdmitStudentPage() {
                 onClick={() => {
                   setShowAddTeacher((v) => !v);
                   setFieldErrors((prev) => {
-                    const { newTeacherName, ...rest } = prev;
+                    const { newTeacherName, newTeacherEmail, ...rest } = prev;
                     return rest;
                   });
                 }}
@@ -777,11 +819,17 @@ export default function AdmitStudentPage() {
                   </Field>
                   <Field label="Age">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       className="input"
+                      placeholder="e.g. 34"
                       value={form.newTeacher.age}
                       onChange={(e) =>
-                        updateNewTeacherField("age", e.target.value)
+                        updateNewTeacherField(
+                          "age",
+                          e.target.value.replace(/[^0-9]/g, "")
+                        )
                       }
                     />
                   </Field>
@@ -796,11 +844,17 @@ export default function AdmitStudentPage() {
                   </Field>
                   <Field label="Experience (years)">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       className="input"
+                      placeholder="e.g. 5"
                       value={form.newTeacher.experienceYears}
                       onChange={(e) =>
-                        updateNewTeacherField("experienceYears", e.target.value)
+                        updateNewTeacherField(
+                          "experienceYears",
+                          e.target.value.replace(/[^0-9]/g, "")
+                        )
                       }
                     />
                   </Field>
@@ -814,10 +868,14 @@ export default function AdmitStudentPage() {
                       }
                     />
                   </Field>
-                  <Field label="Email (optional)" className="col-span-2">
+                  <Field
+                    label="Email"
+                    className="col-span-2"
+                    error={fieldErrors.newTeacherEmail}
+                  >
                     <input
                       type="email"
-                      className="input"
+                      className={`input ${fieldErrors.newTeacherEmail ? "input-error" : ""}`}
                       placeholder="teacher@example.com"
                       value={form.newTeacher.email}
                       onChange={(e) =>
@@ -846,7 +904,14 @@ export default function AdmitStudentPage() {
               <h2 className="font-semibold text-gray-700 border-b border-gray-100 pb-2 mb-4 mt-6">
                 Parent Summary
               </h2>
-              <SummaryRow label="Parent" value={form.parentFirstName} />
+              <SummaryRow
+                label="Parent"
+                value={
+                  form.parentTitle
+                    ? `${form.parentTitle} ${form.parentFirstName}`
+                    : form.parentFirstName
+                }
+              />
               <SummaryRow
                 label="Phone"
                 value={

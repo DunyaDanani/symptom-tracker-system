@@ -42,29 +42,58 @@ export const getResources = async (req, res) => {
       createdAt: -1,
     });
 
-    // Modules: subject folder -> topic sub-groups -> files. All 5 subject
+    // Modules: subject folder -> topic sub-groups -> teacher's files plus
+    // the child/parent's own submissions for that same topic. Submissions
+    // live alongside the module files they answer, rather than in their own
+    // separate section, so a topic is the one place to see both what the
+    // teacher assigned and what's been turned in for it. All 5 subject
     // folders are always returned (even empty) so the UI can show them as
     // persistent folders rather than only appearing once something's
     // uploaded.
+    const withOwner = (r) => ({
+      ...r.toObject(),
+      isOwner: r.uploadedBy.toString() === req.user.id,
+    });
+
     const modules = SUBJECTS.map((subject) => {
-      const subjectResources = resources.filter(
+      const moduleResources = resources.filter(
         (r) => r.type === "module" && r.subject === subject
+      );
+      const submissionResources = resources.filter(
+        (r) => r.type === "submission" && r.subject === subject
       );
 
       const topicOrder = [];
-      const topicMap = {};
-      subjectResources.forEach((r) => {
+      const topicModuleMap = {};
+      const topicSubmissionMap = {};
+
+      moduleResources.forEach((r) => {
         const key = r.topic || "Untitled Topic";
-        if (!topicMap[key]) {
-          topicMap[key] = [];
+        if (!topicModuleMap[key]) {
+          topicModuleMap[key] = [];
           topicOrder.push(key);
         }
-        topicMap[key].push(r);
+        topicModuleMap[key].push(r);
+      });
+
+      // A submission always targets an existing topic (the child submits
+      // from within that topic's view), but fold in any topic that only
+      // has submissions too, just in case — a topic should never silently
+      // disappear because it has no module files yet.
+      submissionResources.forEach((r) => {
+        const key = r.topic || "Untitled Topic";
+        if (!topicOrder.includes(key)) topicOrder.push(key);
+        if (!topicSubmissionMap[key]) topicSubmissionMap[key] = [];
+        topicSubmissionMap[key].push(r);
       });
 
       return {
         subject,
-        topics: topicOrder.map((topic) => ({ topic, files: topicMap[topic] })),
+        topics: topicOrder.map((topic) => ({
+          topic,
+          files: (topicModuleMap[topic] || []).map(withOwner),
+          submissions: (topicSubmissionMap[topic] || []).map(withOwner),
+        })),
       };
     });
 
@@ -72,9 +101,9 @@ export const getResources = async (req, res) => {
     // approach as modules.
     const pastPapers = SUBJECTS.map((subject) => ({
       subject,
-      files: resources.filter(
-        (r) => r.type === "pastPaper" && r.subject === subject
-      ),
+      files: resources
+        .filter((r) => r.type === "pastPaper" && r.subject === subject)
+        .map(withOwner),
     }));
 
     res.json({
@@ -92,10 +121,12 @@ export const getResources = async (req, res) => {
 };
 
 // @route   POST /api/study-modules
-// @access  Shadow Teacher only (module, pastPaper) — doctor's recommendation
-// uploads now go through the dedicated /api/doctor-documents endpoints.
+// @access  Shadow Teacher (module, pastPaper) or Child/Parent (submission) —
+// doctor's recommendation uploads now go through the dedicated
+// /api/doctor-documents endpoints.
 // Body (multipart/form-data): studentId, type, subject, topic? (required
-// for "module"), file
+// for "module" and "submission" — a submission always targets the topic
+// it's answering), file
 export const uploadResource = async (req, res) => {
   const { studentId, type, subject, topic } = req.body;
 
@@ -107,10 +138,27 @@ export const uploadResource = async (req, res) => {
       });
     }
 
-    if (!["module", "pastPaper"].includes(type)) {
+    if (!["module", "pastPaper", "submission"].includes(type)) {
       return res.status(400).json({
         success: false,
         message: "Invalid resource type",
+      });
+    }
+
+    // Modules/past papers are teacher-authored course material; submissions
+    // are the child/parent handing their completed work back. Keep the two
+    // directions separate even though they share one endpoint/route.
+    const isTeacherType = type === "module" || type === "pastPaper";
+    if (isTeacherType && req.user.role !== "shadow_teacher") {
+      return res.status(403).json({
+        success: false,
+        message: "Only the shadow teacher can upload modules or past papers",
+      });
+    }
+    if (type === "submission" && !["child", "parent"].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the child or parent can upload a submission",
       });
     }
 
@@ -121,10 +169,10 @@ export const uploadResource = async (req, res) => {
       });
     }
 
-    if (type === "module" && !topic?.trim()) {
+    if ((type === "module" || type === "submission") && !topic?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "A topic name is required for module uploads",
+        message: "A topic name is required for this upload",
       });
     }
 
@@ -147,7 +195,7 @@ export const uploadResource = async (req, res) => {
       student: studentId,
       type,
       subject,
-      topic: type === "module" ? topic.trim() : undefined,
+      topic: type === "module" || type === "submission" ? topic.trim() : undefined,
       fileName: req.file.originalname,
       filePath: req.file.path,
       uploadedBy: req.user.id,
@@ -210,8 +258,82 @@ export const downloadResource = async (req, res) => {
   }
 };
 
+// @route   PUT /api/study-modules/:id
+// @access  Whoever uploaded the file (shadow teacher for modules/past
+// papers, child or parent for their own submission) — same uploader-only
+// rule as delete below.
+// Body (multipart/form-data, all optional): subject, topic, file. Only the
+// fields provided are changed; a new file (if any) replaces the old one on
+// disk. The resource's "type" itself can't be changed.
+export const editResource = async (req, res) => {
+  const { id } = req.params;
+  const { subject, topic } = req.body;
+
+  try {
+    const resource = await StudyResource.findById(id);
+    if (!resource) {
+      return res.status(404).json({
+        success: false,
+        message: "File not found",
+      });
+    }
+
+    if (resource.uploadedBy.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only edit files you uploaded",
+      });
+    }
+
+    if (subject !== undefined) {
+      if (!SUBJECTS.includes(subject)) {
+        return res.status(400).json({
+          success: false,
+          message: "A valid subject folder is required",
+        });
+      }
+      resource.subject = subject;
+    }
+
+    if (topic !== undefined) {
+      const needsTopic = resource.type === "module" || resource.type === "submission";
+      if (needsTopic && !topic.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "A topic name is required for this file",
+        });
+      }
+      resource.topic = needsTopic ? topic.trim() : undefined;
+    }
+
+    if (req.file) {
+      const oldPath = resource.filePath;
+      resource.fileName = req.file.originalname;
+      resource.filePath = req.file.path;
+      fs.unlink(oldPath, () => {
+        // Best-effort cleanup of the replaced file — if it's already gone,
+        // that's fine.
+      });
+    }
+
+    await resource.save();
+
+    res.json({
+      success: true,
+      resource,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   DELETE /api/study-modules/:id
-// @access  Shadow Teacher (whoever uploaded the file)
+// @access  Whoever uploaded the file (shadow teacher for modules/past
+// papers, child or parent for their own submission)
 export const deleteResource = async (req, res) => {
   const { id } = req.params;
 

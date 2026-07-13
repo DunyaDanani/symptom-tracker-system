@@ -164,7 +164,7 @@ export default function PrincipalDashboardPage() {
                     {isExpanded && (
                       <div className="px-6 pb-4 -mt-1">
                         <p className="text-xs text-gray-500 mb-2">
-                          Grade {s.grade}
+                          {s.grade}
                           {s.section ? ` · ${s.section}` : ""} · Teacher:{" "}
                           {s.assignedTeacher?.name || "Unassigned"}
                         </p>

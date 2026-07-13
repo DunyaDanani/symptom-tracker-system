@@ -1,4 +1,34 @@
 @import "tailwindcss";
+
+/* Styles the native "Choose File" control as an actual button on every
+   file upload input across the app (message attachments, doctor
+   documents, study module uploads, etc.) — applied globally here instead
+   of per-form so every upload control stays consistent automatically.
+   Solid background + padding + pointer cursor makes it read as clickable
+   and visually distinct from the plain "No file chosen" text next to it,
+   rather than blending in as part of the same sentence. */
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: #ffffff;
+  background-color: #0284c7;
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 1rem;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover {
+  background-color: #0369a1;
+}
+
+input[type="file"] {
+  cursor: pointer;
+}
 /* Full background */
 .container {
   height: 100vh;

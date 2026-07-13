@@ -196,10 +196,14 @@ export default function AdminTeacherProfilePage({
                   </EditField>
                   <EditField label="Age">
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
                       value={editAge}
-                      onChange={(e) => setEditAge(e.target.value)}
+                      onChange={(e) =>
+                        setEditAge(e.target.value.replace(/[^0-9]/g, ""))
+                      }
                     />
                   </EditField>
                   <EditField label="Experience (years)">

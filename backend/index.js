@@ -12,6 +12,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import studyModuleRoutes from "./routes/studyModuleRoutes.js";
 import doctorDocumentRoutes from "./routes/doctorDocumentRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
+import { closeBrowser } from "./utils/pdfGenerator.js";
 
 dotenv.config();
 
@@ -46,6 +47,15 @@ app.use("/api/doctor-documents", doctorDocumentRoutes);
 app.use("/api/notices", noticeRoutes);
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+
+// Make sure the headless Chrome instance used for PDF report generation
+// doesn't linger as an orphaned process after the server stops.
+const shutdown = async () => {
+  await closeBrowser();
+  server.close(() => process.exit(0));
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

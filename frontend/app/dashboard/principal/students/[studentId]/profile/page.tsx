@@ -89,7 +89,7 @@ export default function PrincipalStudentProfilePage({
                 )}
               </div>
               <p className="text-sm text-gray-500 mt-1">
-                Grade {student.grade}
+                {student.grade}
                 {student.section ? ` · ${student.section}` : ""} ·{" "}
                 {student.diagnosis}
               </p>

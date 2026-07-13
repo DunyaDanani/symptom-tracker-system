@@ -8,6 +8,7 @@ import { API_BASE } from "@/lib/config";
 
 interface LinkedStudent {
   _id: string;
+  admissionNumber: string;
   firstName: string;
   lastName: string;
   grade: string;
@@ -159,6 +160,7 @@ export default function FamilyDashboardHome({
               <p className="text-red-500 text-sm">{error}</p>
             ) : student ? (
               <dl className="space-y-3 text-sm">
+                <Row label="Admission Number" value={student.admissionNumber} />
                 <Row
                   label="Name"
                   value={`${student.firstName} ${student.lastName}`}
@@ -220,6 +222,7 @@ export default function FamilyDashboardHome({
             <p className="text-red-500 text-sm">{error}</p>
           ) : student ? (
             <dl className="space-y-3 text-sm">
+              <Row label="Admission Number" value={student.admissionNumber} />
               <Row
                 label="Name"
                 value={`${student.firstName} ${student.lastName}`}

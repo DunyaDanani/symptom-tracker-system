@@ -4,6 +4,7 @@ import path from "path";
 import {
   getResources,
   uploadResource,
+  editResource,
   deleteResource,
   downloadResource,
 } from "../controllers/studyModuleController.js";
@@ -39,10 +40,22 @@ router.get(
 );
 router.post(
   "/",
-  authorizeRoles("shadow_teacher"),
+  authorizeRoles("shadow_teacher", "child", "parent"),
   runUpload(upload.single("file")),
   uploadResource
 );
-router.delete("/:id", authorizeRoles("shadow_teacher"), deleteResource);
+// File is optional on edit (metadata-only edits don't include one) — same
+// multer instance handles that fine, req.file just stays undefined.
+router.put(
+  "/:id",
+  authorizeRoles("shadow_teacher", "child", "parent"),
+  runUpload(upload.single("file")),
+  editResource
+);
+router.delete(
+  "/:id",
+  authorizeRoles("shadow_teacher", "child", "parent"),
+  deleteResource
+);
 
 export default router;

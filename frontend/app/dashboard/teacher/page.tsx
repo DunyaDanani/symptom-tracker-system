@@ -166,7 +166,7 @@ export default function TeacherDashboardPage() {
                     {s.firstName} {s.lastName}
                   </span>
                   <span className="text-xs text-gray-400">
-                    Grade {s.grade}
+                    {s.grade}
                     {s.section ? ` · ${s.section}` : ""}
                   </span>
                   {s.flagged && (

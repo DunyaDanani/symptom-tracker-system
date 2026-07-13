@@ -49,17 +49,24 @@ export const getAdminStats = async (req, res) => {
 // @route   POST /api/staff/principals
 // @access  Admin only
 // Creates a principal login account scoped to one branch. Email is
-// optional at creation time — without one, forgot-password won't work
-// for this account until they (or the admin) add one later.
-// Body: { name, branch, email? }
+// required at creation time — it's how login credentials get sent, and
+// how the forgot-password flow works for this account going forward.
+// Body: { title?, name, branch, email }
 export const createPrincipal = async (req, res) => {
-  const { name, branch, email } = req.body;
+  const { title, name, branch, email } = req.body;
 
   try {
-    if (!name || !branch) {
+    if (!name || !branch || !email) {
       return res.status(400).json({
         success: false,
-        message: "Name and branch are required",
+        message: "Name, branch, and email are required",
+      });
+    }
+
+    if (title && !["Mr", "Mrs", "Ms"].includes(title)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid title",
       });
     }
 
@@ -70,21 +77,19 @@ export const createPrincipal = async (req, res) => {
       });
     }
 
-    const trimmedEmail = email ? email.trim().toLowerCase() : "";
-    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!isValidEmail(trimmedEmail)) {
       return res.status(400).json({
         success: false,
         message: "Please provide a valid email address",
       });
     }
-    if (trimmedEmail) {
-      const existingEmail = await User.findOne({ email: trimmedEmail });
-      if (existingEmail) {
-        return res.status(400).json({
-          success: false,
-          message: "That email is already linked to another account",
-        });
-      }
+    const existingEmail = await User.findOne({ email: trimmedEmail });
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "That email is already linked to another account",
+      });
     }
 
     const [firstName, ...rest] = name.trim().split(" ");
@@ -98,32 +103,31 @@ export const createPrincipal = async (req, res) => {
       username,
       password: hashedPassword,
       role: "principal",
+      title: title || "",
       name,
       branch,
-      email: trimmedEmail || null,
+      email: trimmedEmail,
     });
     await principal.save();
 
     let emailSent = false;
-    if (trimmedEmail) {
-      try {
-        await sendEmail({
-          to: trimmedEmail,
-          subject: "Your OKI International School principal account",
-          html: `
-            <p>Hello ${name},</p>
-            <p>A Branch Principal account for ${branch} has been created for you. Here are your login credentials:</p>
-            <p>
-              Username: ${username}<br/>
-              Password: ${tempPassword}
-            </p>
-            <p>Please log in and change your password when convenient.</p>
-          `,
-        });
-        emailSent = true;
-      } catch (emailError) {
-        console.error("Failed to email principal credentials:", emailError);
-      }
+    try {
+      await sendEmail({
+        to: trimmedEmail,
+        subject: "Your OKI International School principal account",
+        html: `
+          <p>Hello ${title ? `${title} ` : ""}${name},</p>
+          <p>A Branch Principal account for ${branch} has been created for you. Here are your login credentials:</p>
+          <p>
+            Username: ${username}<br/>
+            Password: ${tempPassword}
+          </p>
+          <p>Please log in and change your password when convenient.</p>
+        `,
+      });
+      emailSent = true;
+    } catch (emailError) {
+      console.error("Failed to email principal credentials:", emailError);
     }
 
     res.status(201).json({
@@ -133,6 +137,7 @@ export const createPrincipal = async (req, res) => {
       emailSent,
       principal: {
         _id: principal._id,
+        title: principal.title,
         name: principal.name,
         branch: principal.branch,
         email: principal.email,
@@ -153,7 +158,7 @@ export const createPrincipal = async (req, res) => {
 export const getPrincipals = async (req, res) => {
   try {
     const principals = await User.find({ role: "principal" }).select(
-      "name username branch email createdAt"
+      "title name username branch email createdAt"
     );
 
     res.json({
@@ -171,12 +176,14 @@ export const getPrincipals = async (req, res) => {
 
 // @route   PATCH /api/staff/principals/:id
 // @access  Admin only
-// Lets admin edit an existing principal's name, branch, or recovery
-// email after the account's been created.
-// Body: { name?, branch?, email? }
+// Lets admin edit an existing principal's title, name, branch, or
+// recovery email after the account's been created. Email is required
+// going forward (it's how credentials/reset flows reach this account),
+// so an update can't clear it out to blank.
+// Body: { title?, name?, branch?, email? }
 export const updatePrincipal = async (req, res) => {
   const { id } = req.params;
-  const { name, branch, email } = req.body;
+  const { title, name, branch, email } = req.body;
 
   try {
     const principal = await User.findOne({ _id: id, role: "principal" });
@@ -194,29 +201,41 @@ export const updatePrincipal = async (req, res) => {
       });
     }
 
-    if (typeof email === "string") {
-      const trimmedEmail = email.trim().toLowerCase();
-      if (trimmedEmail) {
-        if (!isValidEmail(trimmedEmail)) {
-          return res.status(400).json({
-            success: false,
-            message: "Please provide a valid email address",
-          });
-        }
-        const existingEmail = await User.findOne({
-          email: trimmedEmail,
-          _id: { $ne: id },
-        });
-        if (existingEmail) {
-          return res.status(400).json({
-            success: false,
-            message: "That email is already linked to another account",
-          });
-        }
-      }
-      principal.email = trimmedEmail || null;
+    if (title !== undefined && title && !["Mr", "Mrs", "Ms"].includes(title)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid title",
+      });
     }
 
+    if (typeof email === "string") {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+      if (!isValidEmail(trimmedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address",
+        });
+      }
+      const existingEmail = await User.findOne({
+        email: trimmedEmail,
+        _id: { $ne: id },
+      });
+      if (existingEmail) {
+        return res.status(400).json({
+          success: false,
+          message: "That email is already linked to another account",
+        });
+      }
+      principal.email = trimmedEmail;
+    }
+
+    if (title !== undefined) principal.title = title || "";
     if (name && name.trim()) principal.name = name.trim();
     if (branch) principal.branch = branch;
 
@@ -227,6 +246,7 @@ export const updatePrincipal = async (req, res) => {
       message: "Principal updated",
       principal: {
         _id: principal._id,
+        title: principal.title,
         name: principal.name,
         username: principal.username,
         branch: principal.branch,

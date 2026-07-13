@@ -267,21 +267,26 @@ export default function MessageComposeForm() {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         02. Message Category
       </label>
-      <div className="border border-slate-200 rounded mb-5 max-h-56 overflow-y-auto">
-        {categories.map((c) => (
-          <button
-            type="button"
-            key={c}
-            onClick={() => setCategory(c)}
-            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-              category === c
-                ? "bg-sky-100 text-sky-800 font-medium"
-                : "text-gray-700 hover:bg-slate-50"
-            }`}
-          >
-            {c}
-          </button>
-        ))}
+      <div className="mb-5">
+        <div className="border border-slate-200 rounded max-h-56 overflow-y-auto">
+          {categories.map((c) => (
+            <button
+              type="button"
+              key={c}
+              onClick={() => setCategory(c)}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                category === c
+                  ? "bg-sky-100 text-sky-800 font-medium"
+                  : "text-gray-700 hover:bg-slate-50"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+        {category && (
+          <p className="text-xs text-sky-700 mt-2">Selected: {category}</p>
+        )}
       </div>
 
       <label className="block text-sm font-medium text-gray-700 mb-1">

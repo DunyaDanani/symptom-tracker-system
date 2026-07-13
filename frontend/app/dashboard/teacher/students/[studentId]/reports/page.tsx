@@ -102,7 +102,7 @@ export default function TeacherStudentReportsPage({
           <h1 className="text-2xl font-semibold text-blue-900">Reports</h1>
           {student && (
             <p className="text-sm text-gray-500">
-              {student.firstName} {student.lastName} · Grade {student.grade}
+              {student.firstName} {student.lastName} · {student.grade}
               {student.section ? ` · ${student.section}` : ""}
             </p>
           )}

@@ -8,6 +8,7 @@ import { API_BASE } from "@/lib/config";
 
 interface StudentProfile {
   _id: string;
+  admissionNumber?: string;
   firstName: string;
   lastName: string;
   grade: string;
@@ -75,6 +76,8 @@ export default function PrintReportPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [generatedBy, setGeneratedBy] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   useEffect(() => {
     setGeneratedBy(localStorage.getItem("name") || "");
@@ -149,6 +152,44 @@ export default function PrintReportPage({
     load();
   }, [studentId, range]);
 
+  // Downloads the server-rendered PDF (Puppeteer, via the backend) rather
+  // than relying on the browser's own print-to-PDF. GET + Bearer auth can't
+  // go through a plain <a href>, so fetch it as a blob and trigger the
+  // browser's save dialog manually.
+  const handleDownloadPdf = async () => {
+    setDownloading(true);
+    setDownloadError("");
+    const token = localStorage.getItem("token");
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/students/${studentId}/report.pdf?range=${range}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || "Failed to generate PDF report");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${student?.firstName || "student"}-${student?.lastName || ""}-${range}-report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error ? err.message : "Failed to download PDF report"
+      );
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const generatedAt = new Date();
 
   return (
@@ -187,13 +228,27 @@ export default function PrintReportPage({
             3-Month Final Conclusion
           </button>
         </div>
-        <button
-          onClick={() => window.print()}
-          disabled={loading || !!error}
-          className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
-        >
-          Print / Save as PDF
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.print()}
+              disabled={loading || !!error}
+              className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
+            >
+              Print / Save as PDF
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={loading || !!error || downloading}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
+            >
+              {downloading ? "Generating..." : "Download PDF"}
+            </button>
+          </div>
+          {downloadError && (
+            <p className="text-xs text-red-500">{downloadError}</p>
+          )}
+        </div>
       </div>
 
       {/* Printable sheet */}
@@ -241,6 +296,10 @@ export default function PrintReportPage({
               <InfoRow
                 label="Student Name"
                 value={`${student?.firstName} ${student?.lastName}`}
+              />
+              <InfoRow
+                label="Admission No."
+                value={student?.admissionNumber || "—"}
               />
               <InfoRow
                 label="Grade"
@@ -425,4 +484,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-   
