@@ -6,6 +6,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import BackButton from "@/components/BackButton";
 import { GRADE_TAXONOMY, getCategory } from "@/lib/gradeTaxonomy";
 import { isValidEmail } from "@/lib/validation";
+import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL_CODE } from "@/lib/countryCodes";
 import { API_BASE } from "@/lib/config";
 
 interface Teacher {
@@ -44,6 +45,7 @@ export default function AdmitStudentPage() {
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials>({});
   const [emailSent, setEmailSent] = useState(false);
@@ -72,6 +74,7 @@ export default function AdmitStudentPage() {
     parentFirstName: "",
     parentRelationship: "",
     parentEmail: "",
+    parentPhoneCountry: DEFAULT_COUNTRY_DIAL_CODE,
     parentPhone: "",
     homeCity: "",
     assignedTeacherId: "",
@@ -134,49 +137,68 @@ export default function AdmitStudentPage() {
     }));
   };
 
-  // Returns an error message if the given step is missing required fields,
-  // or "" if the step is complete. Keeps the wizard from letting someone
+  // Returns a map of field key -> inline error message for the given step
+  // ({} if the step is complete). Rendered directly under each blank field
+  // instead of as one combined banner, so it's obvious at a glance which
+  // fields still need filling in. Keeps the wizard from letting someone
   // click through to Review with blank name/grade/DOB etc.
-  const validateStep = (stepNum: number): string => {
+  const validateStep = (stepNum: number): Record<string, string> => {
+    const errors: Record<string, string> = {};
+
     if (stepNum === 1) {
-      const missing: string[] = [];
-      if (!form.admissionNumber.trim()) missing.push(REQUIRED_LABELS.admissionNumber);
-      if (!form.firstName.trim()) missing.push(REQUIRED_LABELS.firstName);
-      if (!form.lastName.trim()) missing.push(REQUIRED_LABELS.lastName);
-      if (!form.dateOfBirth) missing.push(REQUIRED_LABELS.dateOfBirth);
-      if (!form.gender) missing.push(REQUIRED_LABELS.gender);
-      if (!form.grade) missing.push(REQUIRED_LABELS.grade);
-      if (!form.diagnosis.trim()) missing.push(REQUIRED_LABELS.diagnosis);
-      if (missing.length > 0) {
-        return `Please fill in: ${missing.join(", ")}`;
-      }
+      if (!form.admissionNumber.trim())
+        errors.admissionNumber = `${REQUIRED_LABELS.admissionNumber} is required`;
+      if (!form.firstName.trim())
+        errors.firstName = `${REQUIRED_LABELS.firstName} is required`;
+      if (!form.lastName.trim())
+        errors.lastName = `${REQUIRED_LABELS.lastName} is required`;
+      if (!form.dateOfBirth)
+        errors.dateOfBirth = `${REQUIRED_LABELS.dateOfBirth} is required`;
+      if (!form.gender) errors.gender = `${REQUIRED_LABELS.gender} is required`;
+      if (!form.grade) errors.grade = `${REQUIRED_LABELS.grade} is required`;
+      if (!form.diagnosis.trim())
+        errors.diagnosis = `${REQUIRED_LABELS.diagnosis} is required`;
     }
+
     if (stepNum === 2) {
-      const missing: string[] = [];
-      if (!form.parentFirstName.trim()) missing.push(REQUIRED_LABELS.parentFirstName);
-      if (!form.parentRelationship) missing.push(REQUIRED_LABELS.parentRelationship);
-      if (!form.parentEmail.trim()) missing.push(REQUIRED_LABELS.parentEmail);
-      if (!form.parentPhone.trim()) missing.push(REQUIRED_LABELS.parentPhone);
-      if (missing.length > 0) {
-        return `Please fill in: ${missing.join(", ")}`;
-      }
-      if (!isValidEmail(form.parentEmail)) {
-        return "Please enter a valid email address (e.g. name@example.com)";
+      if (!form.parentFirstName.trim())
+        errors.parentFirstName = `${REQUIRED_LABELS.parentFirstName} is required`;
+      if (!form.parentRelationship)
+        errors.parentRelationship = `${REQUIRED_LABELS.parentRelationship} is required`;
+      if (!form.parentEmail.trim())
+        errors.parentEmail = `${REQUIRED_LABELS.parentEmail} is required`;
+      else if (!isValidEmail(form.parentEmail))
+        errors.parentEmail = "Enter a valid email address (e.g. name@example.com)";
+      if (!form.parentPhone.trim())
+        errors.parentPhone = `${REQUIRED_LABELS.parentPhone} is required`;
+    }
+
+    if (stepNum === 3) {
+      // Assigning an existing teacher or skipping entirely is fine — this
+      // only fires if the "Add new shadow teacher" panel is open and left
+      // incomplete, so someone can't half-fill it and move on.
+      if (showAddTeacher && !form.newTeacher.name.trim()) {
+        errors.newTeacherName = "Teacher name is required";
       }
     }
-    return "";
+
+    return errors;
   };
 
   const goNext = () => {
-    const validationError = validateStep(step);
-    if (validationError) {
-      setError(validationError);
+    const errors = validateStep(step);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
+    setFieldErrors({});
     setError("");
     setStep((s) => Math.min(s + 1, 4));
   };
-  const goBack = () => setStep((s) => Math.max(s - 1, 1));
+  const goBack = () => {
+    setFieldErrors({});
+    setStep((s) => Math.max(s - 1, 1));
+  };
 
   const handleSelectTeacher = (id: string) => {
     setForm((prev) => ({
@@ -184,25 +206,30 @@ export default function AdmitStudentPage() {
       assignedTeacherId: id,
       newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     }));
+    setFieldErrors((prev) => {
+      const { newTeacherName, ...rest } = prev;
+      return rest;
+    });
   };
 
   const handleConfirm = async () => {
     // Re-validate every step before the final submit — someone could have
     // reached step 4 via Back/Next without ever tripping goNext's checks
     // (e.g. browser back/forward), so don't rely solely on per-step gating.
-    const step1Error = validateStep(1);
-    if (step1Error) {
-      setError(step1Error);
+    const step1Errors = validateStep(1);
+    if (Object.keys(step1Errors).length > 0) {
+      setFieldErrors(step1Errors);
       setStep(1);
       return;
     }
-    const step2Error = validateStep(2);
-    if (step2Error) {
-      setError(step2Error);
+    const step2Errors = validateStep(2);
+    if (Object.keys(step2Errors).length > 0) {
+      setFieldErrors(step2Errors);
       setStep(2);
       return;
     }
 
+    setFieldErrors({});
     setSubmitting(true);
     setError("");
     const token = localStorage.getItem("token");
@@ -222,7 +249,7 @@ export default function AdmitStudentPage() {
       parentFirstName: form.parentFirstName,
       parentRelationship: form.parentRelationship,
       parentEmail: form.parentEmail,
-      parentPhone: form.parentPhone,
+      parentPhone: `${form.parentPhoneCountry} ${form.parentPhone.trim()}`,
       homeCity: form.homeCity,
     };
 
@@ -293,6 +320,7 @@ export default function AdmitStudentPage() {
       parentFirstName: "",
       parentRelationship: "",
       parentEmail: "",
+      parentPhoneCountry: DEFAULT_COUNTRY_DIAL_CODE,
       parentPhone: "",
       homeCity: "",
       assignedTeacherId: "",
@@ -301,6 +329,7 @@ export default function AdmitStudentPage() {
     setCredentials({});
     setEmailSent(false);
     setSuccess(false);
+    setFieldErrors({});
     setStep(1);
   };
 
@@ -477,39 +506,42 @@ export default function AdmitStudentPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Admission Number">
+                <Field
+                  label="Admission Number"
+                  error={fieldErrors.admissionNumber}
+                >
                   <input
-                    className="input"
+                    className={`input ${fieldErrors.admissionNumber ? "input-error" : ""}`}
                     placeholder="e.g. OKI2026045"
                     value={form.admissionNumber}
                     onChange={(e) => updateField("admissionNumber", e.target.value)}
                   />
                 </Field>
-                <Field label="First Name">
+                <Field label="First Name" error={fieldErrors.firstName}>
                   <input
-                    className="input"
+                    className={`input ${fieldErrors.firstName ? "input-error" : ""}`}
                     value={form.firstName}
                     onChange={(e) => updateField("firstName", e.target.value)}
                   />
                 </Field>
-                <Field label="Last Name">
+                <Field label="Last Name" error={fieldErrors.lastName}>
                   <input
-                    className="input"
+                    className={`input ${fieldErrors.lastName ? "input-error" : ""}`}
                     value={form.lastName}
                     onChange={(e) => updateField("lastName", e.target.value)}
                   />
                 </Field>
-                <Field label="Date of Birth">
+                <Field label="Date of Birth" error={fieldErrors.dateOfBirth}>
                   <input
                     type="date"
-                    className="input"
+                    className={`input ${fieldErrors.dateOfBirth ? "input-error" : ""}`}
                     value={form.dateOfBirth}
                     onChange={(e) => updateField("dateOfBirth", e.target.value)}
                   />
                 </Field>
-                <Field label="Gender">
+                <Field label="Gender" error={fieldErrors.gender}>
                   <select
-                    className="input"
+                    className={`input ${fieldErrors.gender ? "input-error" : ""}`}
                     value={form.gender}
                     onChange={(e) => updateField("gender", e.target.value)}
                   >
@@ -536,9 +568,9 @@ export default function AdmitStudentPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Grade / Class">
+                <Field label="Grade / Class" error={fieldErrors.grade}>
                   <select
-                    className="input"
+                    className={`input ${fieldErrors.grade ? "input-error" : ""}`}
                     value={form.grade}
                     disabled={!form.categorySlug}
                     onChange={(e) => updateField("grade", e.target.value)}
@@ -568,9 +600,9 @@ export default function AdmitStudentPage() {
               </p>
 
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Primary diagnosis">
+                <Field label="Primary diagnosis" error={fieldErrors.diagnosis}>
                   <input
-                    className="input"
+                    className={`input ${fieldErrors.diagnosis ? "input-error" : ""}`}
                     placeholder="e.g. ASD"
                     value={form.diagnosis}
                     onChange={(e) => updateField("diagnosis", e.target.value)}
@@ -608,16 +640,16 @@ export default function AdmitStudentPage() {
                 Parent / Guardian Information
               </h2>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="First Name">
+                <Field label="First Name" error={fieldErrors.parentFirstName}>
                   <input
-                    className="input"
+                    className={`input ${fieldErrors.parentFirstName ? "input-error" : ""}`}
                     value={form.parentFirstName}
                     onChange={(e) => updateField("parentFirstName", e.target.value)}
                   />
                 </Field>
-                <Field label="Relationship">
+                <Field label="Relationship" error={fieldErrors.parentRelationship}>
                   <select
-                    className="input"
+                    className={`input ${fieldErrors.parentRelationship ? "input-error" : ""}`}
                     value={form.parentRelationship}
                     onChange={(e) => updateField("parentRelationship", e.target.value)}
                   >
@@ -627,21 +659,36 @@ export default function AdmitStudentPage() {
                     <option value="Guardian">Guardian</option>
                   </select>
                 </Field>
-                <Field label="Email Address">
+                <Field label="Email Address" error={fieldErrors.parentEmail}>
                   <input
                     type="email"
-                    className="input"
+                    className={`input ${fieldErrors.parentEmail ? "input-error" : ""}`}
                     value={form.parentEmail}
                     onChange={(e) => updateField("parentEmail", e.target.value)}
                   />
                 </Field>
-                <Field label="Phone Number">
-                  <input
-                    className="input"
-                    placeholder="94+"
-                    value={form.parentPhone}
-                    onChange={(e) => updateField("parentPhone", e.target.value)}
-                  />
+                <Field label="Phone Number" error={fieldErrors.parentPhone}>
+                  <div className="flex gap-2">
+                    <select
+                      className={`input w-32 shrink-0 truncate ${fieldErrors.parentPhone ? "input-error" : ""}`}
+                      value={form.parentPhoneCountry}
+                      onChange={(e) =>
+                        updateField("parentPhoneCountry", e.target.value)
+                      }
+                    >
+                      {COUNTRY_CODES.map((c) => (
+                        <option key={c.iso} value={c.dialCode}>
+                          {c.dialCode} ({c.name})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className={`input ${fieldErrors.parentPhone ? "input-error" : ""}`}
+                      placeholder="e.g. 771234567"
+                      value={form.parentPhone}
+                      onChange={(e) => updateField("parentPhone", e.target.value)}
+                    />
+                  </div>
                 </Field>
                 <Field label="Home City">
                   <input
@@ -705,7 +752,13 @@ export default function AdmitStudentPage() {
               </div>
 
               <button
-                onClick={() => setShowAddTeacher((v) => !v)}
+                onClick={() => {
+                  setShowAddTeacher((v) => !v);
+                  setFieldErrors((prev) => {
+                    const { newTeacherName, ...rest } = prev;
+                    return rest;
+                  });
+                }}
                 className="w-full bg-sky-500 hover:bg-sky-600 text-white text-sm font-medium py-2.5 rounded mb-4"
               >
                 Add new shadow teacher {showAddTeacher ? "▲" : "▼"}
@@ -713,9 +766,9 @@ export default function AdmitStudentPage() {
 
               {showAddTeacher && (
                 <div className="grid grid-cols-2 gap-4 border border-gray-100 rounded p-4">
-                  <Field label="Name">
+                  <Field label="Name" error={fieldErrors.newTeacherName}>
                     <input
-                      className="input"
+                      className={`input ${fieldErrors.newTeacherName ? "input-error" : ""}`}
                       value={form.newTeacher.name}
                       onChange={(e) =>
                         updateNewTeacherField("name", e.target.value)
@@ -794,7 +847,14 @@ export default function AdmitStudentPage() {
                 Parent Summary
               </h2>
               <SummaryRow label="Parent" value={form.parentFirstName} />
-              <SummaryRow label="Phone" value={form.parentPhone} />
+              <SummaryRow
+                label="Phone"
+                value={
+                  form.parentPhone
+                    ? `${form.parentPhoneCountry} ${form.parentPhone}`
+                    : ""
+                }
+              />
               <SummaryRow label="Email" value={form.parentEmail} />
 
               <h2 className="font-semibold text-gray-700 border-b border-gray-100 pb-2 mb-4 mt-6">
@@ -875,6 +935,12 @@ export default function AdmitStudentPage() {
         .input:focus {
           border-color: #38bdf8;
         }
+        .input-error {
+          border-color: #f87171;
+        }
+        .input-error:focus {
+          border-color: #ef4444;
+        }
       `}</style>
     </DashboardLayout>
   );
@@ -884,10 +950,12 @@ function Field({
   label,
   children,
   className = "",
+  error,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
+  error?: string;
 }) {
   return (
     <div className={className}>
@@ -895,6 +963,7 @@ function Field({
         {label}
       </label>
       {children}
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
 }

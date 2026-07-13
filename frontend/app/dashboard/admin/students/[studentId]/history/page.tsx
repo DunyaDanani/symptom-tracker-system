@@ -41,6 +41,85 @@ const EMOJI_ICON: Record<string, string> = Object.fromEntries(
   EMOJI_OPTIONS.map((o) => [o.value, o.icon])
 );
 
+interface StudentRecord {
+  _id: string;
+  branch: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  grade: string;
+  section?: string;
+  diagnosis: string;
+  communicationLevel: string;
+  additionalNotes?: string;
+  parentFirstName: string;
+  parentRelationship?: string;
+  parentEmail: string;
+  parentPhone: string;
+  homeCity?: string;
+  flagged?: boolean;
+  flagNote?: string;
+}
+
+type ProfileForm = {
+  branch: string;
+  admissionNumber: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  gender: string;
+  grade: string;
+  section: string;
+  diagnosis: string;
+  communicationLevel: string;
+  additionalNotes: string;
+  parentFirstName: string;
+  parentRelationship: string;
+  parentEmail: string;
+  parentPhone: string;
+  homeCity: string;
+};
+
+const blankProfileForm: ProfileForm = {
+  branch: "",
+  admissionNumber: "",
+  firstName: "",
+  lastName: "",
+  dateOfBirth: "",
+  gender: "",
+  grade: "",
+  section: "",
+  diagnosis: "",
+  communicationLevel: "non-verbal",
+  additionalNotes: "",
+  parentFirstName: "",
+  parentRelationship: "",
+  parentEmail: "",
+  parentPhone: "",
+  homeCity: "",
+};
+
+const profileFromStudent = (s: StudentRecord): ProfileForm => ({
+  branch: s.branch || "",
+  admissionNumber: s.admissionNumber || "",
+  firstName: s.firstName || "",
+  lastName: s.lastName || "",
+  dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : "",
+  gender: s.gender || "",
+  grade: s.grade || "",
+  section: s.section || "",
+  diagnosis: s.diagnosis || "",
+  communicationLevel: s.communicationLevel || "non-verbal",
+  additionalNotes: s.additionalNotes || "",
+  parentFirstName: s.parentFirstName || "",
+  parentRelationship: s.parentRelationship || "",
+  parentEmail: s.parentEmail || "",
+  parentPhone: s.parentPhone || "",
+  homeCity: s.homeCity || "",
+});
+
 export default function AdminStudentHistoryPage({
   params,
 }: {
@@ -60,6 +139,16 @@ export default function AdminStudentHistoryPage({
   const [flagged, setFlagged] = useState(false);
   const [flagNote, setFlagNote] = useState("");
   const [savingFlag, setSavingFlag] = useState(false);
+
+  // Student profile edit state
+  const [branches, setBranches] = useState<string[]>([]);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState<ProfileForm>(blankProfileForm);
+  const [profileStatus, setProfileStatus] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [studentRecord, setStudentRecord] = useState<StudentRecord | null>(
+    null
+  );
 
   // Add-symptom form state
   const [newSymptoms, setNewSymptoms] = useState<string[]>([]);
@@ -113,12 +202,17 @@ export default function AdminStudentHistoryPage({
     const data = await res.json();
     if (data.success) {
       const found = data.students.find(
-        (s: { _id: string; flagged?: boolean; flagNote?: string }) =>
-          s._id === studentId
+        (s: StudentRecord) => s._id === studentId
       );
       if (found) {
         setFlagged(!!found.flagged);
         setFlagNote(found.flagNote || "");
+        setStudentRecord(found);
+        // Don't clobber the form if the admin currently has it open —
+        // only re-sync it into the form when not actively mid-edit.
+        setProfileForm((prev) =>
+          editingProfile ? prev : profileFromStudent(found)
+        );
       }
     }
   };
@@ -126,11 +220,17 @@ export default function AdminStudentHistoryPage({
   useEffect(() => {
     const load = async () => {
       try {
-        const optionsRes = await fetch(`${API_BASE}/students/symptom-options`, {
-          headers: authHeaders(),
-        });
+        const [optionsRes, branchesRes] = await Promise.all([
+          fetch(`${API_BASE}/students/symptom-options`, {
+            headers: authHeaders(),
+          }),
+          fetch(`${API_BASE}/students/branches`, { headers: authHeaders() }),
+        ]);
         const optionsData = await optionsRes.json();
         if (optionsData.success) setSymptomOptions(optionsData.options);
+
+        const branchesData = await branchesRes.json();
+        if (branchesData.success) setBranches(branchesData.branches);
 
         await Promise.all([loadHistory(), loadStudent()]);
       } catch (err) {
@@ -159,6 +259,64 @@ export default function AdminStudentHistoryPage({
       console.error("Failed to update flag", err);
     } finally {
       setSavingFlag(false);
+    }
+  };
+
+  const updateProfileField = (field: keyof ProfileForm, value: string) => {
+    setProfileForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const startEditProfile = () => {
+    if (studentRecord) setProfileForm(profileFromStudent(studentRecord));
+    setProfileStatus("");
+    setEditingProfile(true);
+  };
+
+  const cancelEditProfile = () => {
+    if (studentRecord) setProfileForm(profileFromStudent(studentRecord));
+    setProfileStatus("");
+    setEditingProfile(false);
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileStatus("");
+
+    if (
+      !profileForm.firstName.trim() ||
+      !profileForm.lastName.trim() ||
+      !profileForm.dateOfBirth ||
+      !profileForm.gender ||
+      !profileForm.grade.trim() ||
+      !profileForm.diagnosis.trim() ||
+      !profileForm.parentFirstName.trim() ||
+      !profileForm.parentEmail.trim() ||
+      !profileForm.parentPhone.trim()
+    ) {
+      setProfileStatus("Please fill in all required fields.");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const res = await fetch(`${API_BASE}/students/${studentId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(profileForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProfileStatus("Profile updated.");
+        setEditingProfile(false);
+        await loadStudent();
+      } else {
+        setProfileStatus(data.message || "Could not update profile.");
+      }
+    } catch (err) {
+      console.error("Failed to update student profile", err);
+      setProfileStatus("Unable to reach the server.");
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -389,6 +547,300 @@ export default function AdminStudentHistoryPage({
                 {savingFlag ? "Saving..." : flagged ? "Clear Flag" : "Flag for Attention"}
               </button>
             </div>
+          </div>
+
+          <div className="bg-white rounded-md shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">
+                Student Profile
+              </h2>
+              {!editingProfile && (
+                <button
+                  onClick={startEditProfile}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Edit Profile
+                </button>
+              )}
+            </div>
+
+            {editingProfile ? (
+              <form onSubmit={saveProfile}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ProfileField label="Branch">
+                    <select
+                      className="profile-input"
+                      value={profileForm.branch}
+                      onChange={(e) =>
+                        updateProfileField("branch", e.target.value)
+                      }
+                    >
+                      {branches.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </ProfileField>
+                  <ProfileField label="Admission Number">
+                    <input
+                      className="profile-input"
+                      value={profileForm.admissionNumber}
+                      onChange={(e) =>
+                        updateProfileField("admissionNumber", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="First Name">
+                    <input
+                      className="profile-input"
+                      value={profileForm.firstName}
+                      onChange={(e) =>
+                        updateProfileField("firstName", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Last Name">
+                    <input
+                      className="profile-input"
+                      value={profileForm.lastName}
+                      onChange={(e) =>
+                        updateProfileField("lastName", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Date of Birth">
+                    <input
+                      type="date"
+                      className="profile-input"
+                      value={profileForm.dateOfBirth}
+                      onChange={(e) =>
+                        updateProfileField("dateOfBirth", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Gender">
+                    <select
+                      className="profile-input"
+                      value={profileForm.gender}
+                      onChange={(e) =>
+                        updateProfileField("gender", e.target.value)
+                      }
+                    >
+                      <option value="">Select</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </ProfileField>
+                  <ProfileField label="Grade / Class">
+                    <input
+                      className="profile-input"
+                      value={profileForm.grade}
+                      onChange={(e) =>
+                        updateProfileField("grade", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Section">
+                    <input
+                      className="profile-input"
+                      value={profileForm.section}
+                      onChange={(e) =>
+                        updateProfileField("section", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Primary Diagnosis">
+                    <input
+                      className="profile-input"
+                      value={profileForm.diagnosis}
+                      onChange={(e) =>
+                        updateProfileField("diagnosis", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Communication Level">
+                    <select
+                      className="profile-input"
+                      value={profileForm.communicationLevel}
+                      onChange={(e) =>
+                        updateProfileField(
+                          "communicationLevel",
+                          e.target.value
+                        )
+                      }
+                    >
+                      <option value="non-verbal">Non-verbal</option>
+                      <option value="partially-verbal">
+                        Partially verbal
+                      </option>
+                      <option value="verbal">Verbal</option>
+                    </select>
+                  </ProfileField>
+                  <ProfileField label="Home City">
+                    <input
+                      className="profile-input"
+                      value={profileForm.homeCity}
+                      onChange={(e) =>
+                        updateProfileField("homeCity", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                </div>
+
+                <ProfileField label="Additional Notes" className="mt-4">
+                  <textarea
+                    rows={2}
+                    className="profile-input"
+                    value={profileForm.additionalNotes}
+                    onChange={(e) =>
+                      updateProfileField("additionalNotes", e.target.value)
+                    }
+                  />
+                </ProfileField>
+
+                <p className="text-xs font-semibold text-gray-400 mt-6 mb-3 tracking-wide">
+                  PARENT / GUARDIAN
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <ProfileField label="Parent Name">
+                    <input
+                      className="profile-input"
+                      value={profileForm.parentFirstName}
+                      onChange={(e) =>
+                        updateProfileField("parentFirstName", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Relationship">
+                    <input
+                      className="profile-input"
+                      placeholder="e.g. Mother"
+                      value={profileForm.parentRelationship}
+                      onChange={(e) =>
+                        updateProfileField(
+                          "parentRelationship",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Parent Email">
+                    <input
+                      type="email"
+                      className="profile-input"
+                      value={profileForm.parentEmail}
+                      onChange={(e) =>
+                        updateProfileField("parentEmail", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                  <ProfileField label="Parent Phone">
+                    <input
+                      className="profile-input"
+                      value={profileForm.parentPhone}
+                      onChange={(e) =>
+                        updateProfileField("parentPhone", e.target.value)
+                      }
+                    />
+                  </ProfileField>
+                </div>
+
+                {profileStatus && (
+                  <p className="text-xs text-gray-500 mt-4">{profileStatus}</p>
+                )}
+
+                <div className="flex gap-2 mt-5">
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="bg-blue-900 hover:bg-blue-800 transition-colors text-white text-sm font-medium px-5 py-2.5 rounded disabled:opacity-60"
+                  >
+                    {savingProfile ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditProfile}
+                    className="text-sm text-gray-500 px-5 py-2.5"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <style jsx>{`
+                  .profile-input {
+                    width: 100%;
+                    font-size: 0.875rem;
+                    border: 1px solid #e5e7eb;
+                    border-radius: 0.375rem;
+                    padding: 0.5rem;
+                    outline: none;
+                  }
+                  .profile-input:focus {
+                    border-color: #60a5fa;
+                  }
+                `}</style>
+              </form>
+            ) : studentRecord ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
+                <InfoRow label="Branch" value={studentRecord.branch} />
+                <InfoRow
+                  label="Admission #"
+                  value={studentRecord.admissionNumber}
+                />
+                <InfoRow
+                  label="Name"
+                  value={`${studentRecord.firstName} ${studentRecord.lastName}`}
+                />
+                <InfoRow
+                  label="Date of Birth"
+                  value={
+                    studentRecord.dateOfBirth
+                      ? new Date(
+                          studentRecord.dateOfBirth
+                        ).toLocaleDateString()
+                      : "—"
+                  }
+                />
+                <InfoRow label="Gender" value={studentRecord.gender} />
+                <InfoRow
+                  label="Grade / Section"
+                  value={`${studentRecord.grade}${
+                    studentRecord.section ? ` · ${studentRecord.section}` : ""
+                  }`}
+                />
+                <InfoRow label="Diagnosis" value={studentRecord.diagnosis} />
+                <InfoRow
+                  label="Communication"
+                  value={studentRecord.communicationLevel}
+                />
+                <InfoRow
+                  label="Home City"
+                  value={studentRecord.homeCity || "—"}
+                />
+                <InfoRow
+                  label="Parent"
+                  value={`${studentRecord.parentFirstName}${
+                    studentRecord.parentRelationship
+                      ? ` (${studentRecord.parentRelationship})`
+                      : ""
+                  }`}
+                />
+                <InfoRow
+                  label="Parent Email"
+                  value={studentRecord.parentEmail}
+                />
+                <InfoRow
+                  label="Parent Phone"
+                  value={studentRecord.parentPhone}
+                />
+              </div>
+            ) : (
+              <p className="text-gray-400 text-sm">
+                Student profile unavailable.
+              </p>
+            )}
           </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -706,5 +1158,33 @@ export default function AdminStudentHistoryPage({
         </>
       )}
     </DashboardLayout>
+  );
+}
+
+function ProfileField({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={className}>
+      <label className="block text-xs font-medium text-gray-500 mb-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-400">{label}</p>
+      <p className="text-gray-800">{value || "—"}</p>
+    </div>
   );
 }

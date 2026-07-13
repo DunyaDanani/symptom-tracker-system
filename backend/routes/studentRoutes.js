@@ -23,6 +23,7 @@ import {
   adminUpdateEmotionCheckin,
   adminDeleteEmotionCheckin,
   updateTeacherAccount,
+  updateStudentProfile,
 } from "../controllers/studentController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
@@ -103,6 +104,7 @@ router.post("/", registerStudent);
 router.get("/", getAllStudents);
 router.get("/teachers", getAvailableTeachers);
 router.patch("/teachers/:id", updateTeacherAccount);
+router.patch("/:studentId", updateStudentProfile);
 router.patch("/:studentId/flag", adminSetStudentFlag);
 
 // Admin add/edit/delete access to symptom logs and emotion check-ins —

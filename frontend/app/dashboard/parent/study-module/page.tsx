@@ -8,7 +8,7 @@ export default function ParentStudyModulePage() {
   return (
     <FamilyDashboardLayout role="parent">
       <BackButton />
-      <StudyModuleContent />
+      <StudyModuleContent role="parent" />
     </FamilyDashboardLayout>
   );
 }

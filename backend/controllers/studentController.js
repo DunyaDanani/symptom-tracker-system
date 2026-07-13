@@ -1039,6 +1039,211 @@ export const getSymptomTrends = async (req, res) => {
   }
 };
 
+// @route   PATCH /api/students/:studentId
+// @access  Admin only
+// Edits a student's core profile fields captured at admission time. Login
+// accounts (studentUser/parentUser), teacher assignment, and the
+// flagged/status fields each have their own dedicated flow, so they're
+// left untouched here — this only covers the descriptive profile data.
+// Every field is optional; only the ones present in the body get updated.
+export const updateStudentProfile = async (req, res) => {
+  const { studentId } = req.params;
+  const {
+    branch,
+    admissionNumber,
+    firstName,
+    lastName,
+    dateOfBirth,
+    gender,
+    grade,
+    section,
+    diagnosis,
+    communicationLevel,
+    additionalNotes,
+    parentFirstName,
+    parentRelationship,
+    parentEmail,
+    parentPhone,
+    homeCity,
+  } = req.body;
+
+  try {
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    if (branch !== undefined) {
+      if (!BRANCHES.includes(branch)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid branch",
+        });
+      }
+      student.branch = branch;
+    }
+
+    if (admissionNumber !== undefined) {
+      const trimmed = admissionNumber.trim();
+      if (!trimmed) {
+        return res.status(400).json({
+          success: false,
+          message: "Admission number is required",
+        });
+      }
+      const existing = await Student.findOne({
+        admissionNumber: trimmed,
+        _id: { $ne: studentId },
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "That admission number is already in use",
+        });
+      }
+      student.admissionNumber = trimmed;
+    }
+
+    if (firstName !== undefined) {
+      if (!firstName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "First name is required",
+        });
+      }
+      student.firstName = firstName.trim();
+    }
+
+    if (lastName !== undefined) {
+      if (!lastName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Last name is required",
+        });
+      }
+      student.lastName = lastName.trim();
+    }
+
+    if (dateOfBirth !== undefined) {
+      if (!dateOfBirth) {
+        return res.status(400).json({
+          success: false,
+          message: "Date of birth is required",
+        });
+      }
+      student.dateOfBirth = dateOfBirth;
+    }
+
+    if (gender !== undefined) {
+      if (!["male", "female", "other"].includes(gender)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid gender",
+        });
+      }
+      student.gender = gender;
+    }
+
+    if (grade !== undefined) {
+      if (!grade.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Grade is required",
+        });
+      }
+      student.grade = grade.trim();
+    }
+
+    if (section !== undefined) student.section = section.trim();
+
+    if (diagnosis !== undefined) {
+      if (!diagnosis.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Diagnosis is required",
+        });
+      }
+      student.diagnosis = diagnosis.trim();
+    }
+
+    if (communicationLevel !== undefined) {
+      if (
+        !["verbal", "non-verbal", "partially-verbal"].includes(
+          communicationLevel
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid communication level",
+        });
+      }
+      student.communicationLevel = communicationLevel;
+    }
+
+    if (additionalNotes !== undefined)
+      student.additionalNotes = additionalNotes.trim();
+
+    if (parentFirstName !== undefined) {
+      if (!parentFirstName.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Parent name is required",
+        });
+      }
+      student.parentFirstName = parentFirstName.trim();
+    }
+
+    if (parentRelationship !== undefined)
+      student.parentRelationship = parentRelationship.trim();
+
+    if (parentEmail !== undefined) {
+      const trimmedEmail = parentEmail.trim().toLowerCase();
+      if (!isValidEmail(trimmedEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid parent email address",
+        });
+      }
+      student.parentEmail = trimmedEmail;
+    }
+
+    if (parentPhone !== undefined) {
+      if (!parentPhone.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: "Parent phone is required",
+        });
+      }
+      student.parentPhone = parentPhone.trim();
+    }
+
+    if (homeCity !== undefined) student.homeCity = homeCity.trim();
+
+    await student.save();
+
+    const populated = await student.populate([
+      { path: "assignedTeacher", select: "name username" },
+      { path: "parentUser", select: "name username" },
+      { path: "studentUser", select: "name username" },
+    ]);
+
+    res.json({
+      success: true,
+      message: "Student profile updated",
+      student: populated,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   PATCH /api/students/:studentId/flag
 // @access  Admin only
 // Body: { flagged: boolean, flagNote?: string }

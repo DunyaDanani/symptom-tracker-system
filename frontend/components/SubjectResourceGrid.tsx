@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { openAuthenticatedFile } from "@/lib/fileAccess";
+import Link from "next/link";
 
-import { API_BASE } from "@/lib/config";
-
-interface ResourceFile {
+export interface ResourceFile {
   _id: string;
   fileName: string;
   filePath: string;
@@ -133,7 +130,7 @@ function KebabIcon({ className }: { className?: string }) {
   );
 }
 
-function ChevronIcon({ className }: { className?: string }) {
+export function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path
@@ -145,7 +142,7 @@ function ChevronIcon({ className }: { className?: string }) {
   );
 }
 
-function BookIcon({ className }: { className?: string }) {
+export function BookIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path d="M9.25 4.5a.75.75 0 00-1.5 0v10a.75.75 0 001.5 0v-10zM4.5 5a1 1 0 011-1h.5a1 1 0 011 1v10a1 1 0 01-1 1h-.5a1 1 0 01-1-1V5zM12 5a1 1 0 011-1h.5a1 1 0 011 1v10a1 1 0 01-1 1H13a1 1 0 01-1-1V5z" />
@@ -153,7 +150,7 @@ function BookIcon({ className }: { className?: string }) {
   );
 }
 
-function PaperclipIcon({ className }: { className?: string }) {
+export function PaperclipIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}
@@ -171,203 +168,81 @@ function PaperclipIcon({ className }: { className?: string }) {
   );
 }
 
-// Modules — subject cards that expand into a topic accordion below the grid.
-export function ModuleSubjectGrid({ groups }: { groups: ModuleSubjectGroup[] }) {
-  const [activeSubject, setActiveSubject] = useState<string | null>(null);
-  const [openTopic, setOpenTopic] = useState<Record<string, boolean>>({});
-
-  const toggleTopic = (key: string) => {
-    setOpenTopic((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const activeGroup = groups.find((g) => g.subject === activeSubject) || null;
-
+// Modules — subject cards that now navigate to a dedicated page for that
+// subject (basePath + "/modules/<subject>") instead of expanding an
+// accordion in place, so "open a subject" is a real page with its own URL
+// and back-button history rather than client-side toggle state.
+export function ModuleSubjectGrid({
+  groups,
+  basePath,
+}: {
+  groups: ModuleSubjectGroup[];
+  basePath: string;
+}) {
   return (
-    <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {groups.map((group, i) => {
-          const fileCount = group.topics.reduce(
-            (sum, t) => sum + t.files.length,
-            0
-          );
-          const isActive = activeSubject === group.subject;
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {groups.map((group, i) => {
+        const fileCount = group.topics.reduce(
+          (sum, t) => sum + t.files.length,
+          0
+        );
 
-          return (
-            <div
-              key={group.subject}
-              className={`bg-white border rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col ${
-                isActive
-                  ? "border-blue-400 ring-1 ring-blue-300"
-                  : "border-gray-100"
-              }`}
-            >
-              <SubjectCover index={i} />
-              <div className="p-4 flex flex-col flex-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveSubject(isActive ? null : group.subject)
-                  }
-                  className="text-sm font-semibold text-blue-700 hover:underline text-left"
-                >
-                  {group.subject}
-                </button>
-                <p className="text-xs text-gray-500 mt-1">
-                  {fileCount} file{fileCount !== 1 ? "s" : ""}
-                </p>
-                <div className="flex justify-end mt-auto pt-3">
-                  <KebabIcon className="w-4 h-4 text-gray-300" />
-                </div>
+        return (
+          <Link
+            key={group.subject}
+            href={`${basePath}/modules/${encodeURIComponent(group.subject)}`}
+            className="text-left bg-white border border-gray-100 rounded-md overflow-hidden flex flex-col shadow-sm hover:shadow-md hover:-translate-y-0.5 active:shadow-inner active:bg-blue-50/40 active:translate-y-0 transition-all"
+          >
+            <SubjectCover index={i} />
+            <div className="p-4 flex flex-col flex-1">
+              <span className="text-sm font-semibold text-blue-700">
+                {group.subject}
+              </span>
+              <p className="text-xs text-gray-500 mt-1">
+                {fileCount} file{fileCount !== 1 ? "s" : ""}
+              </p>
+              <div className="flex justify-end mt-auto pt-3">
+                <KebabIcon className="w-4 h-4 text-gray-300" />
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {activeGroup && (
-        <div className="bg-white border border-gray-100 rounded-md mt-6 p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-3">
-            {activeGroup.subject}
-          </h3>
-          {activeGroup.topics.length === 0 ? (
-            <p className="text-xs text-gray-400">
-              No modules in this subject yet.
-            </p>
-          ) : (
-            <div className="space-y-1.5">
-              {activeGroup.topics.map((t) => {
-                const topicKey = `${activeGroup.subject}::${t.topic}`;
-                return (
-                  <div
-                    key={topicKey}
-                    className="border border-gray-100 rounded-md overflow-hidden"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleTopic(topicKey)}
-                      className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                    >
-                      <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                        <ChevronIcon
-                          className={`w-3.5 h-3.5 text-gray-400 transition-transform ${
-                            openTopic[topicKey] ? "rotate-90" : ""
-                          }`}
-                        />
-                        {t.topic}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {t.files.length} file{t.files.length !== 1 ? "s" : ""}
-                      </span>
-                    </button>
-
-                    {openTopic[topicKey] && (
-                      <div className="divide-y divide-gray-50">
-                        {t.files.map((f) => (
-                          <button
-                            type="button"
-                            key={f._id}
-                            onClick={() =>
-                              openAuthenticatedFile(
-                                `${API_BASE}/study-modules/${f._id}/file`
-                              )
-                            }
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-blue-700 w-full text-left"
-                          >
-                            <BookIcon className="w-4 h-4 text-gray-400" />
-                            {f.fileName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+          </Link>
+        );
+      })}
     </div>
   );
 }
 
-// Past Papers — same card grid, expanding into a flat file list below.
+// Past Papers — same card grid, navigating to basePath + "/past-papers/<subject>".
 export function PastPaperSubjectGrid({
   groups,
+  basePath,
 }: {
   groups: PastPaperSubjectGroup[];
+  basePath: string;
 }) {
-  const [activeSubject, setActiveSubject] = useState<string | null>(null);
-  const activeGroup = groups.find((g) => g.subject === activeSubject) || null;
-
   return (
-    <div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {groups.map((group, i) => {
-          const isActive = activeSubject === group.subject;
-
-          return (
-            <div
-              key={group.subject}
-              className={`bg-white border rounded-md overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col ${
-                isActive
-                  ? "border-blue-400 ring-1 ring-blue-300"
-                  : "border-gray-100"
-              }`}
-            >
-              <SubjectCover index={i + 2} />
-              <div className="p-4 flex flex-col flex-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveSubject(isActive ? null : group.subject)
-                  }
-                  className="text-sm font-semibold text-blue-700 hover:underline text-left"
-                >
-                  {group.subject}
-                </button>
-                <p className="text-xs text-gray-500 mt-1">
-                  {group.files.length} file
-                  {group.files.length !== 1 ? "s" : ""}
-                </p>
-                <div className="flex justify-end mt-auto pt-3">
-                  <KebabIcon className="w-4 h-4 text-gray-300" />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {activeGroup && (
-        <div className="bg-white border border-gray-100 rounded-md mt-6 p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-3">
-            {activeGroup.subject}
-          </h3>
-          {activeGroup.files.length === 0 ? (
-            <p className="text-xs text-gray-400">
-              No past papers in this subject yet.
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {groups.map((group, i) => (
+        <Link
+          key={group.subject}
+          href={`${basePath}/past-papers/${encodeURIComponent(group.subject)}`}
+          className="text-left bg-white border border-gray-100 rounded-md overflow-hidden flex flex-col shadow-sm hover:shadow-md hover:-translate-y-0.5 active:shadow-inner active:bg-blue-50/40 active:translate-y-0 transition-all"
+        >
+          <SubjectCover index={i + 2} />
+          <div className="p-4 flex flex-col flex-1">
+            <span className="text-sm font-semibold text-blue-700">
+              {group.subject}
+            </span>
+            <p className="text-xs text-gray-500 mt-1">
+              {group.files.length} file
+              {group.files.length !== 1 ? "s" : ""}
             </p>
-          ) : (
-            <div className="divide-y divide-gray-50">
-              {activeGroup.files.map((f) => (
-                <button
-                  type="button"
-                  key={f._id}
-                  onClick={() =>
-                    openAuthenticatedFile(
-                      `${API_BASE}/study-modules/${f._id}/file`
-                    )
-                  }
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:text-blue-700 w-full text-left"
-                >
-                  <PaperclipIcon className="w-4 h-4 text-gray-400" />
-                  {f.fileName}
-                </button>
-              ))}
+            <div className="flex justify-end mt-auto pt-3">
+              <KebabIcon className="w-4 h-4 text-gray-300" />
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        </Link>
+      ))}
     </div>
   );
 }

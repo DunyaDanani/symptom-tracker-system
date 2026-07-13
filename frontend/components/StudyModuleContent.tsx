@@ -11,8 +11,15 @@ import { API_BASE } from "@/lib/config";
 
 // Shared "Modules" page body used by both the parent and child dashboards
 // — resolved through the unified /api/students/linked endpoint so the
-// same component works for either role's token.
-export default function StudyModuleContent() {
+// same component works for either role's token. `role` determines which
+// dashboard's URL tree the subject cards link into
+// (/dashboard/<role>/study-module/modules/<subject>, etc).
+export default function StudyModuleContent({
+  role,
+}: {
+  role: "parent" | "child";
+}) {
+  const basePath = `/dashboard/${role}/study-module`;
   const [modules, setModules] = useState<ModuleSubjectGroup[]>([]);
   const [pastPapers, setPastPapers] = useState<PastPaperSubjectGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,14 +77,14 @@ export default function StudyModuleContent() {
       ) : (
         <div className="space-y-10">
           <section>
-            <ModuleSubjectGrid groups={modules} />
+            <ModuleSubjectGrid groups={modules} basePath={basePath} />
           </section>
 
           <section>
             <h2 className="text-lg font-semibold text-blue-900 mb-4">
               Past Papers
             </h2>
-            <PastPaperSubjectGrid groups={pastPapers} />
+            <PastPaperSubjectGrid groups={pastPapers} basePath={basePath} />
           </section>
         </div>
       )}
