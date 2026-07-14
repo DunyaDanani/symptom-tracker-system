@@ -77,7 +77,7 @@ export default function AdminDashboardPage() {
       href: "/dashboard/admin/messages",
     },
     {
-      label: "Doc Recommendations",
+      label: "Doctor's Recommendation",
       value: stats?.pendingDocReviews,
       href: "/dashboard/admin/doc-reviews",
     },

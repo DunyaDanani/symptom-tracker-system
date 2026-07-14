@@ -162,6 +162,58 @@ export const getRoster = async (req, res) => {
   }
 };
 
+// @route   PATCH /api/principal/students/:studentId/exam-eligibility
+// @access  Principal only — scoped to req.user.branch
+// Body: { status: "eligible" | "not_eligible", note? }
+// Typically set after the principal has reviewed the student's uploaded
+// doctor's recommendation documents.
+export const setExamEligibility = async (req, res) => {
+  const { studentId } = req.params;
+  const { status, note } = req.body;
+
+  try {
+    if (!["eligible", "not_eligible"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Status must be 'eligible' or 'not_eligible'",
+      });
+    }
+
+    const student = await Student.findOne({
+      _id: studentId,
+      branch: req.user.branch,
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found in your branch",
+      });
+    }
+
+    student.examEligibility = status;
+    student.examEligibilityNote = note || "";
+    student.examEligibilitySetBy = req.user.id;
+    student.examEligibilitySetAt = new Date();
+    await student.save();
+
+    res.json({
+      success: true,
+      message:
+        status === "eligible"
+          ? "Student marked eligible for the exam"
+          : "Student marked not eligible for the exam",
+      student,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   GET /api/principal/teachers/:teacherId
 // @access  Principal only — scoped to req.user.branch
 // Shadow teacher profile (qualification/specialization/experience) plus

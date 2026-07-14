@@ -103,7 +103,7 @@ export default function PrincipalClassCategoryPage({
               href={`/dashboard/principal/students/classes/${categorySlug}/${grade.slug}`}
               className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow"
             >
-              <FolderIcon className="w-12 h-12 text-amber-400" />
+              <FolderIcon className="w-12 h-12 text-blue-400" />
               <p className="text-sm font-semibold text-gray-800 text-center">
                 {grade.label}
               </p>

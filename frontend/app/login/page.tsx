@@ -214,10 +214,6 @@ export default function LoginPage() {
                 </button>
 
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                  <a href="/forgot-username" className="hover:text-blue-600 hover:underline">
-                    Forgot username?
-                  </a>
-                  <span className="text-gray-300">|</span>
                   <a href="/forgot-password" className="hover:text-blue-600 hover:underline">
                     Forgot password?
                   </a>

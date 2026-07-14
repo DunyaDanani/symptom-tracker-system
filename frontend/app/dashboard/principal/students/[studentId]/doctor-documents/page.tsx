@@ -17,14 +17,37 @@ interface DoctorDoc {
   createdAt: string;
 }
 
+type EligibilityStatus = "pending" | "eligible" | "not_eligible";
+
+interface StudentEligibility {
+  _id: string;
+  examEligibility?: EligibilityStatus;
+  examEligibilityNote?: string;
+  examEligibilitySetAt?: string;
+}
+
 const STATUS_STYLE: Record<DoctorDoc["status"], string> = {
   pending: "text-amber-700 bg-amber-50",
   approved: "text-green-700 bg-green-50",
   rejected: "text-red-700 bg-red-50",
 };
 
-// Read-only for principals — only the parent can upload, only the admin
-// can review/approve. Scoped server-side to the principal's own branch.
+const ELIGIBILITY_STYLE: Record<EligibilityStatus, string> = {
+  pending: "text-amber-700 bg-amber-50",
+  eligible: "text-green-700 bg-green-50",
+  not_eligible: "text-red-700 bg-red-50",
+};
+
+const ELIGIBILITY_LABEL: Record<EligibilityStatus, string> = {
+  pending: "Not yet decided",
+  eligible: "Eligible",
+  not_eligible: "Not eligible",
+};
+
+// Doctor's documents themselves are read-only for principals — only the
+// parent can upload, only the admin can review/approve. Scoped server-side
+// to the principal's own branch. Exam eligibility below, however, is the
+// principal's own call to make, typically after reviewing these documents.
 export default function PrincipalDoctorDocumentsPage({
   params,
 }: {
@@ -35,6 +58,15 @@ export default function PrincipalDoctorDocumentsPage({
   const [documents, setDocuments] = useState<DoctorDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [eligibility, setEligibility] = useState<EligibilityStatus>("pending");
+  const [eligibilityNote, setEligibilityNote] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
+  const [eligibilityLoading, setEligibilityLoading] = useState(true);
+  const [savingStatus, setSavingStatus] = useState<EligibilityStatus | null>(
+    null
+  );
+  const [eligibilityError, setEligibilityError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -58,8 +90,64 @@ export default function PrincipalDoctorDocumentsPage({
       }
     };
 
+    const loadEligibility = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(`${API_BASE}/principal/students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success) {
+          const found = data.students.find(
+            (s: StudentEligibility) => s._id === studentId
+          );
+          if (found) {
+            setEligibility(found.examEligibility || "pending");
+            setEligibilityNote(found.examEligibilityNote || "");
+            setNoteDraft(found.examEligibilityNote || "");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load exam eligibility", err);
+      } finally {
+        setEligibilityLoading(false);
+      }
+    };
+
     load();
+    loadEligibility();
   }, [studentId]);
+
+  const handleSetEligibility = async (status: "eligible" | "not_eligible") => {
+    setSavingStatus(status);
+    setEligibilityError("");
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(
+        `${API_BASE}/principal/students/${studentId}/exam-eligibility`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status, note: noteDraft }),
+        }
+      );
+      const data = await res.json();
+      if (data.success) {
+        setEligibility(status);
+        setEligibilityNote(noteDraft);
+      } else {
+        setEligibilityError(data.message || "Could not update eligibility");
+      }
+    } catch (err) {
+      console.error("Failed to update exam eligibility", err);
+      setEligibilityError("Unable to reach the server");
+    } finally {
+      setSavingStatus(null);
+    }
+  };
 
   return (
     <PrincipalDashboardLayout>
@@ -113,6 +201,69 @@ export default function PrincipalDoctorDocumentsPage({
           ))}
         </div>
       )}
+
+      {/* Exam eligibility — the principal's own call, made after reviewing
+          the documents above. */}
+      <h2 className="text-lg font-semibold text-blue-900 mt-10 mb-4">
+        Exam Eligibility
+      </h2>
+
+      <div className="bg-white rounded-md shadow-sm p-6 max-w-2xl">
+        {eligibilityLoading ? (
+          <p className="text-gray-400 text-sm">Loading...</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <span
+                className={`text-xs font-medium px-2.5 py-1 rounded ${ELIGIBILITY_STYLE[eligibility]}`}
+              >
+                {ELIGIBILITY_LABEL[eligibility]}
+              </span>
+              {eligibilityNote && (
+                <span className="text-sm text-gray-500">
+                  Note: {eligibilityNote}
+                </span>
+              )}
+            </div>
+
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              Note (optional)
+            </label>
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              rows={2}
+              placeholder="e.g. Cleared based on the doctor's recommendation on file"
+              className="w-full bg-slate-100 rounded-sm px-3 py-2 text-sm outline-none text-gray-700 placeholder-gray-400 mb-4"
+            />
+
+            {eligibilityError && (
+              <p className="text-sm text-red-500 mb-3">{eligibilityError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleSetEligibility("eligible")}
+                disabled={savingStatus !== null}
+                className="bg-emerald-500 hover:bg-emerald-600 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-sm disabled:opacity-60"
+              >
+                {savingStatus === "eligible" ? "Saving..." : "Mark Eligible"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetEligibility("not_eligible")}
+                disabled={savingStatus !== null}
+                className="bg-red-500 hover:bg-red-600 transition-colors text-white text-sm font-semibold px-4 py-2 rounded-sm disabled:opacity-60"
+              >
+                {savingStatus === "not_eligible"
+                  ? "Saving..."
+                  : "Mark Not Eligible"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </PrincipalDashboardLayout>
   );
 }

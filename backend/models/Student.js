@@ -158,6 +158,31 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+    // Exam eligibility — set by the branch principal, typically after
+    // reviewing the student's doctor's recommendation documents.
+    // "pending" until the principal makes a call either way.
+    examEligibility: {
+      type: String,
+      enum: ["pending", "eligible", "not_eligible"],
+      default: "pending",
+    },
+
+    examEligibilityNote: {
+      type: String,
+      trim: true,
+    },
+
+    examEligibilitySetBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    examEligibilitySetAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

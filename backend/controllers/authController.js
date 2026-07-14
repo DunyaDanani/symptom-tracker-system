@@ -293,10 +293,6 @@ export const forgotUsername = async (req, res) => {
 // resolveRecoveryEmail above).
 export const forgotPassword = async (req, res) => {
   const { username } = req.body;
-  const generic = {
-    success: true,
-    message: "If that account exists, a reset code has been sent.",
-  };
 
   try {
     if (!username) {
@@ -304,7 +300,9 @@ export const forgotPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ username });
-    if (!user) return res.json(generic);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Invalid username" });
+    }
 
     const recovery = await resolveRecoveryEmail(user);
     if (!recovery || !recovery.email) {
@@ -330,7 +328,10 @@ export const forgotPassword = async (req, res) => {
       message: `${user.role} "${user.username}" requested a password reset.`,
     });
 
-    res.json(generic);
+    res.json({
+      success: true,
+      message: "A reset code has been sent to the e-mail linked with this account.",
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server Error" });

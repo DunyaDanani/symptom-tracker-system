@@ -1,12 +1,38 @@
 // Builds the printable Symptom & Emotion report as a single self-contained
-// HTML string (inline CSS, inline SVG chart — no external assets, no
-// network calls) so Puppeteer can render it deterministically via
-// page.setContent() without depending on the frontend dev/prod server
-// being reachable from the backend.
+// HTML string (inline CSS, inline SVG chart, the school logo inlined as a
+// base64 data URI — no external assets, no network calls) so Puppeteer can
+// render it deterministically via page.setContent() without depending on
+// the frontend dev/prod server being reachable from the backend.
 //
 // Mirrors the layout of frontend/app/dashboard/print-report/[studentId]/page.tsx
 // so parents/admins see the same report whether they hit "Print" in the
 // browser or download the server-generated PDF.
+
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Loaded once (from the shared frontend/public asset) and cached as a data
+// URI — reading a local file isn't a "network call", so this keeps the
+// report self-contained while still showing the real school logo instead
+// of a plain text badge. Falls back to the text badge if the file can't be
+// found (e.g. a deployment layout where backend/frontend aren't siblings).
+let schoolLogoDataUri;
+function getSchoolLogoDataUri() {
+  if (schoolLogoDataUri === undefined) {
+    try {
+      const logoPath = path.join(__dirname, "..", "..", "frontend", "public", "12.jpg");
+      const buffer = fs.readFileSync(logoPath);
+      schoolLogoDataUri = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+    } catch (err) {
+      console.error("Could not load school logo for PDF report:", err);
+      schoolLogoDataUri = null;
+    }
+  }
+  return schoolLogoDataUri;
+}
 
 const EMOJI_ICON = {
   very_sad: "😢 Very sad",
@@ -202,6 +228,7 @@ export function buildReportHtml({
   const gradeSection = `${student.grade}${student.section ? ` · ${student.section}` : ""}`;
   const teacherName = student.assignedTeacher?.name || "Unassigned";
   const parentName = student.parentUser?.name || "—";
+  const logoUri = getSchoolLogoDataUri();
 
   return `<!DOCTYPE html>
 <html>
@@ -231,6 +258,10 @@ export function buildReportHtml({
     background: #1e3a8a; color: #fff;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 13px;
+  }
+  .school-logo {
+    width: 40px; height: 40px; border-radius: 8px;
+    object-fit: contain;
   }
   .school-name { color: #1e3a8a; font-weight: 700; }
   .branch { color: #9ca3af; font-size: 11px; }
@@ -279,7 +310,11 @@ export function buildReportHtml({
 
   <div class="header">
     <div class="school-block">
-      <div class="school-badge">OKI</div>
+      ${
+        logoUri
+          ? `<img src="${logoUri}" alt="OKI International School" class="school-logo" />`
+          : `<div class="school-badge">OKI</div>`
+      }
       <div>
         <div class="school-name">OKI International School</div>
         <div class="branch">${escapeHtml(student.branch || "")} Branch</div>

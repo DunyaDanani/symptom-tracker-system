@@ -6,6 +6,8 @@ import MiniCalendar from "@/components/MiniCalendar";
 
 import { API_BASE } from "@/lib/config";
 
+type EligibilityStatus = "pending" | "eligible" | "not_eligible";
+
 interface LinkedStudent {
   _id: string;
   admissionNumber: string;
@@ -15,10 +17,17 @@ interface LinkedStudent {
   section?: string;
   diagnosis: string;
   communicationLevel: string;
+  examEligibility?: EligibilityStatus;
   assignedTeacher?: { name: string } | null;
   parentUser?: { name: string } | null;
   studentUser?: { name: string } | null;
 }
+
+const ELIGIBILITY_LABEL: Record<EligibilityStatus, string> = {
+  pending: "Not yet decided",
+  eligible: "Eligible",
+  not_eligible: "Not eligible",
+};
 
 // Shared dashboard home for the Parent and Child roles — same shell, same
 // quick-link tiles and student info card, just angled slightly differently
@@ -234,6 +243,10 @@ export default function FamilyDashboardHome({
               <Row
                 label="Shadow Teacher"
                 value={student.assignedTeacher?.name || "Unassigned"}
+              />
+              <Row
+                label="Exam Eligibility"
+                value={ELIGIBILITY_LABEL[student.examEligibility || "pending"]}
               />
             </dl>
           ) : null}

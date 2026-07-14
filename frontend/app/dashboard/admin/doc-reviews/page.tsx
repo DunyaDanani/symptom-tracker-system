@@ -110,7 +110,7 @@ export default function AdminDocReviewsPage() {
     <DashboardLayout>
       <BackButton />
       <div className="flex items-center justify-between mt-2 mb-8 gap-3 flex-wrap">
-        <h1 className="text-2xl font-semibold text-blue-900">Doc Reviews</h1>
+        <h1 className="text-2xl font-semibold text-blue-900">Doctor&apos;s Recommendation</h1>
         <div className="flex gap-2 items-center flex-wrap">
           <select
             value={branch}

@@ -7,6 +7,8 @@ import BackButton from "@/components/BackButton";
 import Avatar from "@/components/Avatar";
 import { API_BASE } from "@/lib/config";
 
+type EligibilityStatus = "pending" | "eligible" | "not_eligible";
+
 interface Student {
   _id: string;
   firstName: string;
@@ -16,9 +18,22 @@ interface Student {
   communicationLevel: string;
   diagnosis: string;
   flagged?: boolean;
+  examEligibility?: EligibilityStatus;
   assignedTeacher?: { name: string } | null;
   parentUser?: { name: string } | null;
 }
+
+const ELIGIBILITY_STYLE: Record<EligibilityStatus, string> = {
+  pending: "text-amber-700 bg-amber-50",
+  eligible: "text-green-700 bg-green-50",
+  not_eligible: "text-red-700 bg-red-50",
+};
+
+const ELIGIBILITY_LABEL: Record<EligibilityStatus, string> = {
+  pending: "Eligibility Not Decided",
+  eligible: "Exam Eligible",
+  not_eligible: "Exam Not Eligible",
+};
 
 export default function PrincipalStudentProfilePage({
   params,
@@ -87,6 +102,11 @@ export default function PrincipalStudentProfilePage({
                     Flagged
                   </span>
                 )}
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${ELIGIBILITY_STYLE[student.examEligibility || "pending"]}`}
+                >
+                  {ELIGIBILITY_LABEL[student.examEligibility || "pending"]}
+                </span>
               </div>
               <p className="text-sm text-gray-500 mt-1">
                 {student.grade}
@@ -148,7 +168,7 @@ export default function PrincipalStudentProfilePage({
                   Doctor&apos;s Recommendation
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  View uploaded documents and review status
+                  View uploaded documents and set exam eligibility
                 </p>
               </Link>
             </div>

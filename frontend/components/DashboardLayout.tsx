@@ -15,7 +15,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard/admin", icon: DashboardIcon },
   { label: "Branches", href: "/dashboard/admin/students", icon: BranchIcon },
   { label: "Messages", href: "/dashboard/admin/messages", icon: MessagesIcon },
-  { label: "Doc Recommendations", href: "/dashboard/admin/doc-reviews", icon: DocIcon },
+  { label: "Doctor's Recommendation", href: "/dashboard/admin/doc-reviews", icon: DocIcon },
   { label: "Notice", href: "/dashboard/admin/notice", icon: NoticeIcon },
   { label: "Alerts", href: "/dashboard/admin/alerts", icon: AlertIcon },
 ];
