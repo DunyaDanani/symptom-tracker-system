@@ -12,6 +12,15 @@ interface Credentials {
   password: string;
 }
 
+// Mirrors the backend's BRANCH_CODES derivation in models/Student.js: BR01
+// for the first branch returned by /students/branches, BR02 for the
+// second, and so on. Both sides index off the same fixed BRANCHES array,
+// so this stays in sync without duplicating the actual code list here.
+const branchIdFor = (branches: string[], branch: string) => {
+  const index = branches.indexOf(branch);
+  return index === -1 ? "" : `BR${String(index + 1).padStart(2, "0")}`;
+};
+
 export default function CreatePrincipalPage() {
   const router = useRouter();
   const [branches, setBranches] = useState<string[]>([]);
@@ -24,6 +33,7 @@ export default function CreatePrincipalPage() {
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [emailSent, setEmailSent] = useState(false);
+  const [createdBranchId, setCreatedBranchId] = useState("");
 
   useEffect(() => {
     const loadBranches = async () => {
@@ -86,6 +96,7 @@ export default function CreatePrincipalPage() {
 
       setCredentials(data.credentials);
       setEmailSent(Boolean(data.emailSent));
+      setCreatedBranchId(data.principal?.branchId || "");
       setSuccess(true);
     } catch (err) {
       console.error("Failed to create principal", err);
@@ -102,6 +113,7 @@ export default function CreatePrincipalPage() {
     setEmail("");
     setCredentials(null);
     setEmailSent(false);
+    setCreatedBranchId("");
     setSuccess(false);
   };
 
@@ -116,7 +128,9 @@ export default function CreatePrincipalPage() {
           <div className="bg-white rounded-md shadow-sm p-6">
             <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded p-4 mb-6">
               Principal account for {title ? `${title} ` : ""}
-              {name} ({branch}) created successfully.
+              {name} ({branch}
+              {createdBranchId ? ` · ${createdBranchId}` : ""}) created
+              successfully.
               {email.trim() && (
                 <>
                   {" "}
@@ -206,7 +220,7 @@ export default function CreatePrincipalPage() {
             Branch
           </label>
           <select
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-6 outline-none focus:border-sky-400"
+            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
           >
@@ -216,6 +230,9 @@ export default function CreatePrincipalPage() {
               </option>
             ))}
           </select>
+          <p className="text-xs text-gray-400 mb-6 mt-1 font-mono">
+            Branch ID: {branchIdFor(branches, branch) || "—"}
+          </p>
 
           <label className="block text-xs font-medium text-gray-500 mb-1">
             Email

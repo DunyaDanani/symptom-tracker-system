@@ -12,6 +12,18 @@ export const BRANCHES = [
   "OKI City School - Negombo",
 ];
 
+// A short, stable code per branch (BR01..BR07), derived from position in
+// BRANCHES above. Purely a display/identification aid for admin — branch
+// itself is still stored as the name string everywhere (Student.branch,
+// User.branch), so this is computed on the fly rather than persisted
+// anywhere, and always stays in sync if BRANCHES is reordered... except
+// don't reorder it, since that would silently reassign every branch's code.
+// Append new branches to the end of the list above to keep codes stable.
+export const BRANCH_CODES = BRANCHES.reduce((map, branchName, index) => {
+  map[branchName] = `BR${String(index + 1).padStart(2, "0")}`;
+  return map;
+}, {});
+
 const studentSchema = new mongoose.Schema(
   {
     branch: {

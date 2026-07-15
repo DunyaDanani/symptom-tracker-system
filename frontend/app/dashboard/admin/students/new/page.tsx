@@ -15,6 +15,9 @@ interface Teacher {
   qualification: string;
   specialization: string;
   experienceYears: number;
+  isAssigned: boolean;
+  myRequestStatus: "pending" | "approved" | "denied" | null;
+  myRequestId: string | null;
 }
 
 interface Credentials {
@@ -53,6 +56,8 @@ export default function AdmitStudentPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [teacherSearch, setTeacherSearch] = useState("");
   const [showAddTeacher, setShowAddTeacher] = useState(false);
+  const [requestingTeacherId, setRequestingTeacherId] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState("");
 
   // Branch list
   const [branches, setBranches] = useState<string[]>([]);
@@ -79,6 +84,7 @@ export default function AdmitStudentPage() {
     homeCity: "",
     assignedTeacherId: "",
     newTeacher: {
+      title: "",
       name: "",
       age: "",
       qualification: "",
@@ -123,6 +129,41 @@ export default function AdmitStudentPage() {
       if (data.success) setTeachers(data.teachers);
     } catch (err) {
       console.error("Failed to load teachers", err);
+    }
+  };
+
+  // Shadow teachers are 1:1 with a single student. If `t` already has one,
+  // this asks the branch principal who currently oversees that teacher for
+  // permission to assign them to a second student — see
+  // TeacherAssignmentRequest on the backend. Re-fetches the teacher list
+  // afterward so the card immediately reflects "Pending approval".
+  const requestTeacherAssignment = async (teacherId: string) => {
+    setRequestingTeacherId(teacherId);
+    setRequestError("");
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(
+        `${API_BASE}/students/teachers/${teacherId}/request-assignment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        }
+      );
+      const data = await res.json();
+      if (!data.success) {
+        setRequestError(data.message || "Failed to send request");
+      } else {
+        await fetchTeachers();
+      }
+    } catch (err) {
+      console.error("Failed to request teacher assignment", err);
+      setRequestError("Unable to reach the server");
+    } finally {
+      setRequestingTeacherId(null);
     }
   };
 
@@ -213,7 +254,7 @@ export default function AdmitStudentPage() {
     setForm((prev) => ({
       ...prev,
       assignedTeacherId: id,
-      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
+      newTeacher: { title: "", name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     }));
     setFieldErrors((prev) => {
       const { newTeacherName, newTeacherEmail, ...rest } = prev;
@@ -273,6 +314,7 @@ export default function AdmitStudentPage() {
       payload.assignedTeacherId = form.assignedTeacherId;
     } else if (form.newTeacher.name) {
       payload.newTeacher = {
+        title: form.newTeacher.title,
         name: form.newTeacher.name,
         age: form.newTeacher.age ? Number(form.newTeacher.age) : undefined,
         qualification: form.newTeacher.qualification,
@@ -341,7 +383,7 @@ export default function AdmitStudentPage() {
       parentPhone: "",
       homeCity: "",
       assignedTeacherId: "",
-      newTeacher: { name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
+      newTeacher: { title: "", name: "", age: "", qualification: "", specialization: "", experienceYears: "", email: "" },
     });
     setCredentials({});
     setEmailSent(false);
@@ -665,7 +707,7 @@ export default function AdmitStudentPage() {
                     <option value="">Select</option>
                     <option value="Mr">Mr</option>
                     <option value="Mrs">Mrs</option>
-                    <option value="Miss">Miss</option>
+                    <option value="Ms">Ms</option>
                   </select>
                 </Field>
                 <Field label="Name" error={fieldErrors.parentFirstName}>
@@ -745,9 +787,18 @@ export default function AdmitStudentPage() {
 
           {step === 3 && (
             <div>
-              <h2 className="font-semibold text-gray-700 border-b border-gray-100 pb-2 mb-4">
-                Available Shadow teacher
-              </h2>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
+                <h2 className="font-semibold text-gray-700">
+                  Available Shadow teacher
+                </h2>
+                <button
+                  type="button"
+                  onClick={fetchTeachers}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Refresh
+                </button>
+              </div>
 
               <input
                 className="input mb-4"
@@ -755,6 +806,10 @@ export default function AdmitStudentPage() {
                 value={teacherSearch}
                 onChange={(e) => setTeacherSearch(e.target.value)}
               />
+
+              {requestError && (
+                <p className="text-xs text-red-500 mb-3">{requestError}</p>
+              )}
 
               <div className="space-y-3 mb-4">
                 {filteredTeachers.length === 0 && (
@@ -764,6 +819,13 @@ export default function AdmitStudentPage() {
                 )}
                 {filteredTeachers.map((t) => {
                   const isSelected = form.assignedTeacherId === t._id;
+                  // A teacher already assigned to a student is only
+                  // selectable if this admin has a still-unused approval
+                  // for them (see TeacherAssignmentRequest) — otherwise
+                  // they need the branch principal's sign-off first.
+                  const canSelect = !t.isAssigned || t.myRequestStatus === "approved";
+                  const isRequesting = requestingTeacherId === t._id;
+
                   return (
                     <div
                       key={t._id}
@@ -777,17 +839,48 @@ export default function AdmitStudentPage() {
                           {t.specialization || "General"} ·{" "}
                           {t.experienceYears} years experience
                         </p>
+                        {t.isAssigned && (
+                          <p className="text-xs text-amber-600 mt-0.5">
+                            Already has a student assigned
+                          </p>
+                        )}
                       </div>
-                      <button
-                        onClick={() => handleSelectTeacher(t._id)}
-                        className={`text-xs font-medium px-4 py-1.5 rounded ${
-                          isSelected
-                            ? "bg-blue-600 text-white"
-                            : "bg-sky-100 text-sky-700 hover:bg-sky-200"
-                        }`}
-                      >
-                        {isSelected ? "Selected" : "Available"}
-                      </button>
+
+                      {canSelect ? (
+                        <button
+                          onClick={() => handleSelectTeacher(t._id)}
+                          className={`text-xs font-medium px-4 py-1.5 rounded ${
+                            isSelected
+                              ? "bg-blue-600 text-white"
+                              : t.isAssigned
+                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              : "bg-sky-100 text-sky-700 hover:bg-sky-200"
+                          }`}
+                        >
+                          {isSelected
+                            ? "Selected"
+                            : t.isAssigned
+                            ? "Approved — select"
+                            : "Available"}
+                        </button>
+                      ) : t.myRequestStatus === "pending" ? (
+                        <span className="text-xs font-medium px-4 py-1.5 rounded bg-amber-100 text-amber-700">
+                          Pending approval
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => requestTeacherAssignment(t._id)}
+                          disabled={isRequesting}
+                          title="This teacher already has a student — ask the branch principal for permission to assign a second one"
+                          className="text-xs font-medium px-4 py-1.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60"
+                        >
+                          {isRequesting
+                            ? "Sending..."
+                            : t.myRequestStatus === "denied"
+                            ? "Denied — request again"
+                            : "Request permission"}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -808,6 +901,20 @@ export default function AdmitStudentPage() {
 
               {showAddTeacher && (
                 <div className="grid grid-cols-2 gap-4 border border-gray-100 rounded p-4">
+                  <Field label="Title">
+                    <select
+                      className="input"
+                      value={form.newTeacher.title}
+                      onChange={(e) =>
+                        updateNewTeacherField("title", e.target.value)
+                      }
+                    >
+                      <option value="">Select</option>
+                      <option value="Mr">Mr</option>
+                      <option value="Mrs">Mrs</option>
+                      <option value="Ms">Ms</option>
+                    </select>
+                  </Field>
                   <Field label="Name" error={fieldErrors.newTeacherName}>
                     <input
                       className={`input ${fieldErrors.newTeacherName ? "input-error" : ""}`}

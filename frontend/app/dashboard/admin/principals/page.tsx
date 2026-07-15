@@ -13,6 +13,7 @@ interface Principal {
   name: string;
   username: string;
   branch: string;
+  branchId?: string;
   email?: string | null;
   createdAt: string;
 }
@@ -81,6 +82,9 @@ export default function AdminPrincipalsPage() {
                   Branch
                 </th>
                 <th className="px-5 py-3 font-semibold text-gray-700">
+                  Branch ID
+                </th>
+                <th className="px-5 py-3 font-semibold text-gray-700">
                   Username
                 </th>
                 <th className="px-5 py-3 font-semibold text-gray-700">
@@ -101,6 +105,9 @@ export default function AdminPrincipalsPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3 text-gray-600">{p.branch}</td>
+                  <td className="px-5 py-3 text-gray-600 font-mono text-xs">
+                    {p.branchId || "—"}
+                  </td>
                   <td className="px-5 py-3 text-gray-600 font-mono text-xs">
                     {p.username}
                   </td>

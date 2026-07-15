@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import User from "../models/User.js";
-import Student, { BRANCHES } from "../models/Student.js";
+import Student, { BRANCHES, BRANCH_CODES } from "../models/Student.js";
 import { generateUsername, generateTempPassword } from "../utils/credentialUtils.js";
 import Alert from "../models/Alert.js";
 import Message from "../models/Message.js";
@@ -110,6 +110,8 @@ export const createPrincipal = async (req, res) => {
     });
     await principal.save();
 
+    const branchId = BRANCH_CODES[branch];
+
     let emailSent = false;
     try {
       await sendEmail({
@@ -117,7 +119,7 @@ export const createPrincipal = async (req, res) => {
         subject: "Your OKI International School principal account",
         html: `
           <p>Hello ${title ? `${title} ` : ""}${name},</p>
-          <p>A Branch Principal account for ${branch} has been created for you. Here are your login credentials:</p>
+          <p>A Branch Principal account for ${branch} (Branch ID: ${branchId}) has been created for you. Here are your login credentials:</p>
           <p>
             Username: ${username}<br/>
             Password: ${tempPassword}
@@ -140,6 +142,7 @@ export const createPrincipal = async (req, res) => {
         title: principal.title,
         name: principal.name,
         branch: principal.branch,
+        branchId,
         email: principal.email,
       },
     });
@@ -161,9 +164,14 @@ export const getPrincipals = async (req, res) => {
       "title name username branch email createdAt"
     );
 
+    const principalsWithBranchId = principals.map((p) => ({
+      ...p.toObject(),
+      branchId: BRANCH_CODES[p.branch],
+    }));
+
     res.json({
       success: true,
-      principals,
+      principals: principalsWithBranchId,
     });
   } catch (error) {
     console.error(error);
@@ -250,6 +258,7 @@ export const updatePrincipal = async (req, res) => {
         name: principal.name,
         username: principal.username,
         branch: principal.branch,
+        branchId: BRANCH_CODES[principal.branch],
         email: principal.email,
       },
     });

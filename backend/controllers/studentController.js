@@ -1,7 +1,9 @@
+import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import Student from "../models/Student.js";
 import User from "../models/User.js";
 import TeacherProfile from "../models/TeacherProfile.js";
+import TeacherAssignmentRequest from "../models/TeacherAssignmentRequest.js";
 import { BRANCHES } from "../models/Student.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
 import EmotionCheckin, { EMOJI_SCORES } from "../models/EmotionCheckin.js";
@@ -56,59 +58,78 @@ export const registerStudent = async (req, res) => {
     parentPhone,
     homeCity,
     assignedTeacherId, // optional - existing teacher's User _id
-    newTeacher, // optional - { name, age, qualification, specialization, experienceYears }
+    newTeacher, // optional - { title, name, age, qualification, specialization, experienceYears }
   } = req.body;
 
+  if (
+    !branch ||
+    !admissionNumber ||
+    !firstName ||
+    !lastName ||
+    !dateOfBirth ||
+    !gender ||
+    !grade ||
+    !diagnosis ||
+    !parentFirstName ||
+    !parentEmail ||
+    !parentPhone
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Missing required student or parent fields",
+    });
+  }
+
+  if (!isValidEmail(parentEmail)) {
+    return res.status(400).json({
+      success: false,
+      message: "Please provide a valid parent email address",
+    });
+  }
+
+  if (!BRANCHES.includes(branch)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid branch",
+    });
+  }
+
+  // Everything below that writes to the DB (student/parent/teacher User
+  // docs, the TeacherProfile, and the Student record itself) runs inside a
+  // single transaction. Previously these were five separate saves with no
+  // atomicity: if a later step failed — e.g. two admins submitting the same
+  // admission number at the same instant, so both passed the pre-check
+  // above and only the second Student.save() hit the unique-index error —
+  // the User accounts already created for that request were left behind as
+  // orphans with no matching Student record. Now any failure rolls
+  // everything back together. Requires Mongo to be running as a replica set
+  // (it already is here — that's what local.oplog.rs is for); a bare
+  // standalone mongod cannot run transactions.
+  const session = await mongoose.startSession();
+  let credentials;
+  let student;
+  let teacherEmailPayload = null;
+
   try {
-    if (
-      !branch ||
-      !admissionNumber ||
-      !firstName ||
-      !lastName ||
-      !dateOfBirth ||
-      !gender ||
-      !grade ||
-      !diagnosis ||
-      !parentFirstName ||
-      !parentEmail ||
-      !parentPhone
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required student or parent fields",
-      });
-    }
-
-    if (!isValidEmail(parentEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid parent email address",
-      });
-    }
-
-    if (!BRANCHES.includes(branch)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid branch",
-      });
-    }
+    session.startTransaction();
 
     const existingAdmissionNumber = await Student.findOne({
       admissionNumber: admissionNumber.trim(),
-    });
+    }).session(session);
     if (existingAdmissionNumber) {
+      await session.abortTransaction();
       return res.status(400).json({
         success: false,
         message: "A student with this admission number already exists",
       });
     }
 
-    const credentials = {};
+    credentials = {};
 
     // 1. Create the student's login account — username = admission number,
     // password = same, so it's short and easy for a child to use.
     const { username: studentUsername, password: studentTempPassword } =
-      await generateStudentCredentials(admissionNumber, User);
+      await generateStudentCredentials(admissionNumber, User, session);
     const studentHashedPassword = await bcrypt.hash(studentTempPassword, 10);
 
     const studentUser = new User({
@@ -117,7 +138,7 @@ export const registerStudent = async (req, res) => {
       role: "child",
       name: `${firstName} ${lastName}`,
     });
-    await studentUser.save();
+    await studentUser.save({ session });
 
     credentials.student = {
       username: studentUsername,
@@ -125,9 +146,9 @@ export const registerStudent = async (req, res) => {
     };
 
     // 2. Create the parent's login account — username = first name + last
-    // 3 digits of their phone number, password = same.
+    // 3 digits of the student's admission number, password = same.
     const { username: parentUsername, password: parentTempPassword } =
-      await generateParentCredentials(parentFirstName, parentPhone, User);
+      await generateParentCredentials(parentFirstName, admissionNumber, User, session);
     const parentHashedPassword = await bcrypt.hash(parentTempPassword, 10);
 
     const parentUser = new User({
@@ -136,7 +157,7 @@ export const registerStudent = async (req, res) => {
       role: "parent",
       name: parentFirstName,
     });
-    await parentUser.save();
+    await parentUser.save({ session });
 
     credentials.parent = {
       username: parentUsername,
@@ -146,18 +167,49 @@ export const registerStudent = async (req, res) => {
     // 3. Resolve the assigned teacher (existing or newly created)
     let assignedTeacher = null;
     let status = "unassigned";
+    let fulfilledRequestId = null;
 
     if (assignedTeacherId) {
       const teacher = await User.findOne({
         _id: assignedTeacherId,
         role: "shadow_teacher",
-      });
+      }).session(session);
 
       if (!teacher) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: "Selected teacher not found or is not a shadow teacher",
         });
+      }
+
+      // Shadow teachers are meant to be 1:1 with a single student. If this
+      // one already has a student in their care, the admin needs the
+      // branch principal's sign-off first (see TeacherAssignmentRequest) —
+      // re-checked here server-side so the rule holds even if the wizard's
+      // own list rendering is stale or bypassed.
+      const alreadyAssigned = await Student.exists({
+        assignedTeacher: assignedTeacherId,
+        status: "assigned",
+      }).session(session);
+
+      if (alreadyAssigned) {
+        const approvedRequest = await TeacherAssignmentRequest.findOne({
+          teacher: assignedTeacherId,
+          requestedBy: req.user.id,
+          status: "approved",
+        }).session(session);
+
+        if (!approvedRequest) {
+          await session.abortTransaction();
+          return res.status(400).json({
+            success: false,
+            message:
+              "This shadow teacher already has a student assigned. Request branch principal approval before assigning them to another student.",
+          });
+        }
+
+        fulfilledRequestId = approvedRequest._id;
       }
 
       assignedTeacher = teacher._id;
@@ -166,52 +218,60 @@ export const registerStudent = async (req, res) => {
       // Username = teacher's first name + last 3 digits of this student's
       // admission number, password = same.
       const { username: teacherUsername, password: teacherTempPassword } =
-        await generateTeacherCredentials(newTeacher.name, admissionNumber, User);
+        await generateTeacherCredentials(newTeacher.name, admissionNumber, User, session);
       const teacherHashedPassword = await bcrypt.hash(teacherTempPassword, 10);
 
       const trimmedTeacherEmail = newTeacher.email
         ? newTeacher.email.trim().toLowerCase()
         : "";
       if (!trimmedTeacherEmail) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: "An email address is required for the shadow teacher",
         });
       }
       if (!isValidEmail(trimmedTeacherEmail)) {
+        await session.abortTransaction();
         return res.status(400).json({
           success: false,
           message: "Please provide a valid email address for the shadow teacher",
         });
       }
-      if (trimmedTeacherEmail) {
-        const existingTeacherEmail = await User.findOne({
-          email: trimmedTeacherEmail,
+
+      const existingTeacherEmail = await User.findOne({
+        email: trimmedTeacherEmail,
+      }).session(session);
+      if (existingTeacherEmail) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: "That teacher email is already linked to another account",
         });
-        if (existingTeacherEmail) {
-          return res.status(400).json({
-            success: false,
-            message: "That teacher email is already linked to another account",
-          });
-        }
       }
 
       const teacherUser = new User({
         username: teacherUsername,
         password: teacherHashedPassword,
         role: "shadow_teacher",
+        title: newTeacher.title || "",
         name: newTeacher.name,
         email: trimmedTeacherEmail || null,
       });
-      await teacherUser.save();
+      await teacherUser.save({ session });
 
-      await TeacherProfile.create({
-        user: teacherUser._id,
-        age: newTeacher.age,
-        qualification: newTeacher.qualification,
-        specialization: newTeacher.specialization,
-        experienceYears: newTeacher.experienceYears,
-      });
+      await TeacherProfile.create(
+        [
+          {
+            user: teacherUser._id,
+            age: newTeacher.age,
+            qualification: newTeacher.qualification,
+            specialization: newTeacher.specialization,
+            experienceYears: newTeacher.experienceYears,
+          },
+        ],
+        { session }
+      );
 
       assignedTeacher = teacherUser._id;
       status = "assigned";
@@ -221,31 +281,22 @@ export const registerStudent = async (req, res) => {
         password: teacherTempPassword,
       };
 
+      // Email is sent after the transaction commits (below) — never from
+      // inside it, so a slow/unreachable SMTP server can't hold the
+      // transaction open or get rolled back along with an unrelated later
+      // failure.
       if (trimmedTeacherEmail) {
-        try {
-          await sendEmail({
-            to: trimmedTeacherEmail,
-            subject: "Your OKI International School shadow teacher account",
-            html: `
-              <p>Hello ${newTeacher.name},</p>
-              <p>A Shadow Teacher account has been created for you. Here are your login credentials:</p>
-              <p>
-                Username: ${teacherUsername}<br/>
-                Password: ${teacherTempPassword}
-              </p>
-              <p>Please log in and change your password when convenient.</p>
-            `,
-          });
-          credentials.teacher.emailSent = true;
-        } catch (emailError) {
-          console.error("Failed to email teacher credentials:", emailError);
-          credentials.teacher.emailSent = false;
-        }
+        teacherEmailPayload = {
+          to: trimmedTeacherEmail,
+          teacherName: newTeacher.name,
+          teacherUsername,
+          teacherTempPassword,
+        };
       }
     }
 
     // 4. Create the Student profile linking everything together
-    const student = new Student({
+    const newStudent = new Student({
       branch,
       admissionNumber: admissionNumber.trim(),
       firstName,
@@ -269,52 +320,109 @@ export const registerStudent = async (req, res) => {
       status,
     });
 
-    await student.save();
+    await newStudent.save({ session });
+    student = newStudent;
 
-    // Email the parent their login credentials. Admission must still
-    // succeed even if SMTP isn't reachable/configured — we report back
-    // whether the send actually worked so the frontend can show accurate
-    // copy instead of unconditionally claiming "credentials sent".
-    let emailSent = false;
-    try {
-      await sendEmail({
-        to: parentEmail,
-        subject: "Your OKI International School account",
-        html: `
-          <p>Hello ${parentTitle ? `${parentTitle} ` : ""}${parentFirstName},</p>
-          <p>${firstName} ${lastName} has been admitted successfully. Here are your login credentials:</p>
-          <p>
-            <strong>Parent login</strong><br/>
-            Username: ${credentials.parent.username}<br/>
-            Password: ${credentials.parent.password}
-          </p>
-          <p>
-            <strong>Student login</strong><br/>
-            Username: ${credentials.student.username}<br/>
-            Password: ${credentials.student.password}
-          </p>
-          <p>Please log in and change these passwords when convenient.</p>
-        `,
-      });
-      emailSent = true;
-    } catch (emailError) {
-      console.error("Failed to email admission credentials:", emailError);
+    // A used approval is spent — it doesn't grant standing permission for
+    // any further students beyond this one.
+    if (fulfilledRequestId) {
+      await TeacherAssignmentRequest.findByIdAndUpdate(
+        fulfilledRequestId,
+        { status: "fulfilled" },
+        { session }
+      );
     }
 
-    res.status(201).json({
-      success: true,
-      message: "Student registered successfully",
-      student,
-      credentials,
-      emailSent,
-    });
+    await session.commitTransaction();
   } catch (error) {
+    if (session.inTransaction()) {
+      try {
+        await session.abortTransaction();
+      } catch (abortError) {
+        console.error("Failed to abort transaction:", abortError);
+      }
+    }
     console.error(error);
-    res.status(500).json({
+
+    // A duplicate-key error here means two requests raced past the
+    // pre-checks above at the same instant (same admission number or, far
+    // more rarely, the same generated username). Everything this request
+    // had written was just rolled back, so it's safe — and much clearer for
+    // the admin — to ask for a retry instead of surfacing a generic 500.
+    if (error && error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "That admission number (or a generated username) was just taken by another request. Please try again.",
+      });
+    }
+
+    return res.status(500).json({
       success: false,
       message: "Server Error",
     });
+  } finally {
+    session.endSession();
   }
+
+  // Emails are best-effort and only sent now that the transaction has
+  // committed — a failed send here can no longer undo a successful
+  // registration, and never rolls back the DB changes.
+  let emailSent = false;
+  try {
+    await sendEmail({
+      to: parentEmail,
+      subject: "Your OKI International School account",
+      html: `
+        <p>Hello ${parentTitle ? `${parentTitle} ` : ""}${parentFirstName},</p>
+        <p>${firstName} ${lastName} has been admitted successfully. Here are your login credentials:</p>
+        <p>
+          <strong>Parent login</strong><br/>
+          Username: ${credentials.parent.username}<br/>
+          Password: ${credentials.parent.password}
+        </p>
+        <p>
+          <strong>Student login</strong><br/>
+          Username: ${credentials.student.username}<br/>
+          Password: ${credentials.student.password}
+        </p>
+        <p>Please log in and change these passwords when convenient.</p>
+      `,
+    });
+    emailSent = true;
+  } catch (emailError) {
+    console.error("Failed to email admission credentials:", emailError);
+  }
+
+  if (teacherEmailPayload) {
+    try {
+      await sendEmail({
+        to: teacherEmailPayload.to,
+        subject: "Your OKI International School shadow teacher account",
+        html: `
+          <p>Hello ${teacherEmailPayload.teacherName},</p>
+          <p>A Shadow Teacher account has been created for you. Here are your login credentials:</p>
+          <p>
+            Username: ${teacherEmailPayload.teacherUsername}<br/>
+            Password: ${teacherEmailPayload.teacherTempPassword}
+          </p>
+          <p>Please log in and change your password when convenient.</p>
+        `,
+      });
+      credentials.teacher.emailSent = true;
+    } catch (emailError) {
+      console.error("Failed to email teacher credentials:", emailError);
+      credentials.teacher.emailSent = false;
+    }
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Student registered successfully",
+    student,
+    credentials,
+    emailSent,
+  });
 };
 
 // @route   GET /api/students
@@ -360,16 +468,48 @@ export const getAvailableTeachers = async (req, res) => {
       profileMap[p.user.toString()] = p;
     });
 
-    const merged = teachers.map((t) => ({
-      _id: t._id,
-      name: t.name,
-      username: t.username,
-      email: t.email || null,
-      qualification: profileMap[t._id.toString()]?.qualification || "",
-      specialization: profileMap[t._id.toString()]?.specialization || "",
-      experienceYears: profileMap[t._id.toString()]?.experienceYears || 0,
-      age: profileMap[t._id.toString()]?.age || null,
-    }));
+    // Shadow teachers are meant to be 1:1 with a single student — figure
+    // out which of these already have one, so the wizard doesn't offer
+    // them as plain "Available" for a second child. See
+    // TeacherAssignmentRequest for the principal-approval override.
+    const assignedTeacherIds = await Student.distinct("assignedTeacher", {
+      assignedTeacher: { $in: teacherIds },
+      status: "assigned",
+    });
+    const assignedSet = new Set(assignedTeacherIds.map((id) => id.toString()));
+
+    // This admin's own in-flight/decided requests, most recent first, so
+    // an approved-but-not-yet-used request unblocks that one teacher for
+    // THIS admin specifically (not for every admin).
+    const myRequests = await TeacherAssignmentRequest.find({
+      teacher: { $in: teacherIds },
+      requestedBy: req.user.id,
+      status: { $in: ["pending", "approved", "denied"] },
+    }).sort({ createdAt: -1 });
+
+    const myRequestByTeacher = {};
+    myRequests.forEach((r) => {
+      const key = r.teacher.toString();
+      if (!myRequestByTeacher[key]) myRequestByTeacher[key] = r;
+    });
+
+    const merged = teachers.map((t) => {
+      const key = t._id.toString();
+      const myRequest = myRequestByTeacher[key];
+      return {
+        _id: t._id,
+        name: t.name,
+        username: t.username,
+        email: t.email || null,
+        qualification: profileMap[key]?.qualification || "",
+        specialization: profileMap[key]?.specialization || "",
+        experienceYears: profileMap[key]?.experienceYears || 0,
+        age: profileMap[key]?.age || null,
+        isAssigned: assignedSet.has(key),
+        myRequestStatus: myRequest?.status || null, // "pending" | "approved" | "denied" | null
+        myRequestId: myRequest?._id || null,
+      };
+    });
 
     res.json({
       success: true,
@@ -1315,7 +1455,7 @@ export const updateStudentProfile = async (req, res) => {
       student.additionalNotes = additionalNotes.trim();
 
     if (parentTitle !== undefined) {
-      if (parentTitle && !["Mr", "Mrs", "Miss"].includes(parentTitle)) {
+      if (parentTitle && !["Mr", "Mrs", "Ms"].includes(parentTitle)) {
         return res.status(400).json({
           success: false,
           message: "Invalid parent title",

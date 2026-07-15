@@ -6,6 +6,11 @@ import {
   getTeacherProfile,
   setExamEligibility,
 } from "../controllers/principalController.js";
+import {
+  listTeacherAssignmentRequestsForPrincipal,
+  getPendingTeacherAssignmentRequestCount,
+  reviewTeacherAssignmentRequest,
+} from "../controllers/teacherAssignmentRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -31,5 +36,9 @@ router.get("/attention", getAttention);
 router.get("/students", getRoster);
 router.patch("/students/:studentId/exam-eligibility", setExamEligibility);
 router.get("/teachers/:teacherId", getTeacherProfile);
+
+router.get("/teacher-requests/pending-count", getPendingTeacherAssignmentRequestCount);
+router.get("/teacher-requests", listTeacherAssignmentRequestsForPrincipal);
+router.patch("/teacher-requests/:id", reviewTeacherAssignmentRequest);
 
 export default router;

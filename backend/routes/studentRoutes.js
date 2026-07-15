@@ -26,6 +26,10 @@ import {
   updateTeacherAccount,
   updateStudentProfile,
 } from "../controllers/studentController.js";
+import {
+  createTeacherAssignmentRequest,
+  listMyTeacherAssignmentRequests,
+} from "../controllers/teacherAssignmentRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
@@ -113,6 +117,8 @@ router.post("/", registerStudent);
 router.get("/", getAllStudents);
 router.get("/teachers", getAvailableTeachers);
 router.patch("/teachers/:id", updateTeacherAccount);
+router.post("/teachers/:id/request-assignment", createTeacherAssignmentRequest);
+router.get("/teacher-requests/mine", listMyTeacherAssignmentRequests);
 router.patch("/:studentId", updateStudentProfile);
 router.patch("/:studentId/flag", adminSetStudentFlag);
 

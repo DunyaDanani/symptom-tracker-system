@@ -15,6 +15,7 @@ interface Principal {
   name: string;
   username: string;
   branch: string;
+  branchId?: string;
   email?: string | null;
   createdAt: string;
 }
@@ -158,6 +159,7 @@ export default function EditPrincipalPage() {
           </h1>
           <p className="text-sm text-gray-500">
             Branch Principal · {principal.branch}
+            {principal.branchId ? ` (${principal.branchId})` : ""}
           </p>
         </div>
       </div>
@@ -226,6 +228,15 @@ export default function EditPrincipalPage() {
           />
           <p className="text-xs text-gray-400 mt-1">
             Used for account recovery (forgot username / password).
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">
+            Branch ID
+          </label>
+          <p className="text-sm text-gray-500 font-mono">
+            {principal.branchId || "—"}
           </p>
         </div>
 

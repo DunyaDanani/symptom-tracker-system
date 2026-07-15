@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import UserMenu from "./UserMenu";
+import { API_BASE } from "@/lib/config";
 
 interface PrincipalDashboardLayoutProps {
   children: ReactNode;
@@ -16,6 +17,11 @@ const navItems = [
   { label: "Notice", href: "/dashboard/principal/notice", icon: NoticeIcon },
   { label: "Messages", href: "/dashboard/principal/messages", icon: MessagesIcon },
   { label: "Student", href: "/dashboard/principal/students", icon: StudentIcon },
+  {
+    label: "Teacher Requests",
+    href: "/dashboard/principal/teacher-requests",
+    icon: TeacherRequestIcon,
+  },
 ];
 
 export default function PrincipalDashboardLayout({
@@ -26,6 +32,7 @@ export default function PrincipalDashboardLayout({
   const [userName, setUserName] = useState<string>("User");
   const [branch, setBranch] = useState<string>("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [pendingTeacherRequests, setPendingTeacherRequests] = useState(0);
 
   useEffect(() => {
     // localStorage is only available client-side, so this can't be read
@@ -36,6 +43,23 @@ export default function PrincipalDashboardLayout({
     const storedBranch = localStorage.getItem("branch");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value, not derived state
     if (storedBranch) setBranch(storedBranch);
+  }, []);
+
+  useEffect(() => {
+    const loadPendingCount = async () => {
+      const token = localStorage.getItem("token");
+      try {
+        const res = await fetch(
+          `${API_BASE}/principal/teacher-requests/pending-count`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+        if (data.success) setPendingTeacherRequests(data.count);
+      } catch (err) {
+        console.error("Failed to load pending teacher request count", err);
+      }
+    };
+    loadPendingCount();
   }, []);
 
   const handleLogout = () => {
@@ -112,7 +136,13 @@ export default function PrincipalDashboardLayout({
                 }`}
               >
                 <item.icon className="w-4 h-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/dashboard/principal/teacher-requests" &&
+                  pendingTeacherRequests > 0 && (
+                    <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none">
+                      {pendingTeacherRequests > 9 ? "9+" : pendingTeacherRequests}
+                    </span>
+                  )}
               </Link>
             );
           })}
@@ -170,6 +200,19 @@ function DashboardIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+    </svg>
+  );
+}
+
+function TeacherRequestIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M10 9a4 4 0 100-8 4 4 0 000 8zM3 18a7 7 0 0114 0H3z" opacity="0.5" />
+      <path
+        fillRule="evenodd"
+        d="M18 8a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1V9a1 1 0 011-1z"
+        clipRule="evenodd"
+      />
     </svg>
   );
 }
