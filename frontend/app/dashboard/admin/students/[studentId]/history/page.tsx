@@ -4,6 +4,8 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
 import BackButton from "@/components/BackButton";
+import { categoryForGrade, gradeSlugForValue } from "@/lib/gradeTaxonomy";
+import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
 interface MedicationEntry {
@@ -19,6 +21,23 @@ interface SymptomLogEntry {
   medications?: MedicationEntry[];
   medicationNotes?: string;
   createdAt: string;
+  teacher?: { name: string; role: string } | null;
+  academicYear?: string;
+  term?: string;
+}
+
+// A symptom log can be recorded by either a shadow teacher or an admin.
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  shadow_teacher: "Shadow Teacher",
+  cao: "CAO",
+  principal: "Principal",
+};
+
+function formatRecordedBy(teacher?: { name: string; role: string } | null) {
+  if (!teacher?.name) return "—";
+  const roleLabel = ROLE_LABELS[teacher.role] || teacher.role || "";
+  return roleLabel ? `${teacher.name} (${roleLabel})` : teacher.name;
 }
 
 interface EmotionCheckinEntry {
@@ -27,7 +46,21 @@ interface EmotionCheckinEntry {
   teacherEmoji?: string;
   compositeScore: number;
   createdAt: string;
+  academicYear?: string;
+  term?: string;
 }
+
+// Common reasons an admin flags a student for the principal's attention —
+// covers the majority of cases with one click; "Other" plus the free-text
+// details box handles everything else.
+const FLAG_REASONS = [
+  "Behavioral concern",
+  "Academic concern",
+  "Attendance issue",
+  "Health / Medical concern",
+  "Family / Home situation",
+  "Other",
+];
 
 const EMOJI_OPTIONS: { value: string; icon: string; label: string }[] = [
   { value: "very_sad", icon: "😢", label: "Very sad" },
@@ -45,8 +78,7 @@ interface StudentRecord {
   _id: string;
   branch: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   dateOfBirth: string;
   gender: string;
   grade: string;
@@ -62,13 +94,19 @@ interface StudentRecord {
   homeCity?: string;
   flagged?: boolean;
   flagNote?: string;
+  assignedTeacher?: {
+    _id: string;
+    name: string;
+    username: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
 type ProfileForm = {
   branch: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   dateOfBirth: string;
   gender: string;
   grade: string;
@@ -87,8 +125,7 @@ type ProfileForm = {
 const blankProfileForm: ProfileForm = {
   branch: "",
   admissionNumber: "",
-  firstName: "",
-  lastName: "",
+  fullName: "",
   dateOfBirth: "",
   gender: "",
   grade: "",
@@ -107,8 +144,7 @@ const blankProfileForm: ProfileForm = {
 const profileFromStudent = (s: StudentRecord): ProfileForm => ({
   branch: s.branch || "",
   admissionNumber: s.admissionNumber || "",
-  firstName: s.firstName || "",
-  lastName: s.lastName || "",
+  fullName: s.fullName || "",
   dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : "",
   gender: s.gender || "",
   grade: s.grade || "",
@@ -131,6 +167,8 @@ export default function AdminStudentHistoryPage({
 }) {
   const { studentId } = use(params);
 
+  const { academicYears, currentTerm } = useAcademicTerms();
+
   const [symptomOptions, setSymptomOptions] = useState<string[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLogEntry[]>([]);
   const [emotionCheckins, setEmotionCheckins] = useState<
@@ -141,6 +179,7 @@ export default function AdminStudentHistoryPage({
 
   // Flag state
   const [flagged, setFlagged] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
   const [flagNote, setFlagNote] = useState("");
   const [savingFlag, setSavingFlag] = useState(false);
 
@@ -157,12 +196,16 @@ export default function AdminStudentHistoryPage({
   // Add-symptom form state
   const [newSymptoms, setNewSymptoms] = useState<string[]>([]);
   const [newNotes, setNewNotes] = useState("");
+  const [newSymptomAcademicYear, setNewSymptomAcademicYear] = useState("");
+  const [newSymptomTerm, setNewSymptomTerm] = useState("");
   const [symptomStatus, setSymptomStatus] = useState("");
   const [savingSymptom, setSavingSymptom] = useState(false);
 
   // Add-emotion form state
   const [newChildEmoji, setNewChildEmoji] = useState("");
   const [newTeacherEmoji, setNewTeacherEmoji] = useState("");
+  const [newEmotionAcademicYear, setNewEmotionAcademicYear] = useState("");
+  const [newEmotionTerm, setNewEmotionTerm] = useState("");
   const [emotionStatus, setEmotionStatus] = useState("");
   const [savingEmotion, setSavingEmotion] = useState(false);
 
@@ -170,6 +213,8 @@ export default function AdminStudentHistoryPage({
   const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [editSymptoms, setEditSymptoms] = useState<string[]>([]);
   const [editNotes, setEditNotes] = useState("");
+  const [editSymptomAcademicYear, setEditSymptomAcademicYear] = useState("");
+  const [editSymptomTerm, setEditSymptomTerm] = useState("");
 
   // Emotion edit state
   const [editingCheckinId, setEditingCheckinId] = useState<string | null>(
@@ -177,6 +222,8 @@ export default function AdminStudentHistoryPage({
   );
   const [editChildEmoji, setEditChildEmoji] = useState("");
   const [editTeacherEmoji, setEditTeacherEmoji] = useState("");
+  const [editEmotionAcademicYear, setEditEmotionAcademicYear] = useState("");
+  const [editEmotionTerm, setEditEmotionTerm] = useState("");
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -249,13 +296,34 @@ export default function AdminStudentHistoryPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
 
+  // Default both "add" forms to whichever term today's date falls into,
+  // once the academic calendar has loaded — still fully editable, this
+  // just saves a click on the common case.
+  useEffect(() => {
+    if (!currentTerm) return;
+    setNewSymptomAcademicYear((prev) => prev || currentTerm.academicYear);
+    setNewSymptomTerm((prev) => prev || currentTerm.term);
+    setNewEmotionAcademicYear((prev) => prev || currentTerm.academicYear);
+    setNewEmotionTerm((prev) => prev || currentTerm.term);
+  }, [currentTerm]);
+
+  // Combines the selected reason with the free-text details into the
+  // single string the backend stores as flagNote — e.g.
+  // "Behavioral concern: keeps leaving the classroom without notice".
+  const composeFlagNote = () => {
+    const details = flagNote.trim();
+    if (flagReason && details) return `${flagReason}: ${details}`;
+    if (flagReason) return flagReason;
+    return details;
+  };
+
   const toggleFlag = async () => {
     setSavingFlag(true);
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/flag`, {
         method: "PATCH",
         headers: authHeaders(),
-        body: JSON.stringify({ flagged: !flagged, flagNote }),
+        body: JSON.stringify({ flagged: !flagged, flagNote: composeFlagNote() }),
       });
       const data = await res.json();
       if (data.success) await loadStudent();
@@ -287,8 +355,7 @@ export default function AdminStudentHistoryPage({
     setProfileStatus("");
 
     if (
-      !profileForm.firstName.trim() ||
-      !profileForm.lastName.trim() ||
+      !profileForm.fullName.trim() ||
       !profileForm.dateOfBirth ||
       !profileForm.gender ||
       !profileForm.grade.trim() ||
@@ -348,13 +415,22 @@ export default function AdminStudentHistoryPage({
       setSymptomStatus("Select at least one symptom.");
       return;
     }
+    if (!newSymptomAcademicYear || !newSymptomTerm) {
+      setSymptomStatus("Select an academic year and term.");
+      return;
+    }
 
     setSavingSymptom(true);
     try {
       const res = await fetch(`${API_BASE}/students/${studentId}/symptoms`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ symptoms: newSymptoms, additionalNotes: newNotes }),
+        body: JSON.stringify({
+          symptoms: newSymptoms,
+          additionalNotes: newNotes,
+          academicYear: newSymptomAcademicYear,
+          term: newSymptomTerm,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -381,6 +457,10 @@ export default function AdminStudentHistoryPage({
       setEmotionStatus("Select both emojis.");
       return;
     }
+    if (!newEmotionAcademicYear || !newEmotionTerm) {
+      setEmotionStatus("Select an academic year and term.");
+      return;
+    }
 
     setSavingEmotion(true);
     try {
@@ -392,6 +472,8 @@ export default function AdminStudentHistoryPage({
           body: JSON.stringify({
             childEmoji: newChildEmoji,
             teacherEmoji: newTeacherEmoji,
+            academicYear: newEmotionAcademicYear,
+            term: newEmotionTerm,
           }),
         }
       );
@@ -416,10 +498,13 @@ export default function AdminStudentHistoryPage({
     setEditingLogId(log._id);
     setEditSymptoms(log.symptoms);
     setEditNotes(log.additionalNotes || "");
+    setEditSymptomAcademicYear(log.academicYear || "");
+    setEditSymptomTerm(log.term || "");
   };
 
   const saveEditLog = async (logId: string) => {
     if (editSymptoms.length === 0) return;
+    if (!editSymptomAcademicYear || !editSymptomTerm) return;
     try {
       const res = await fetch(`${API_BASE}/students/symptoms/${logId}`, {
         method: "PUT",
@@ -427,6 +512,8 @@ export default function AdminStudentHistoryPage({
         body: JSON.stringify({
           symptoms: editSymptoms,
           additionalNotes: editNotes,
+          academicYear: editSymptomAcademicYear,
+          term: editSymptomTerm,
         }),
       });
       const data = await res.json();
@@ -457,10 +544,13 @@ export default function AdminStudentHistoryPage({
     setEditingCheckinId(c._id);
     setEditChildEmoji(c.childEmoji || "");
     setEditTeacherEmoji(c.teacherEmoji || "");
+    setEditEmotionAcademicYear(c.academicYear || "");
+    setEditEmotionTerm(c.term || "");
   };
 
   const saveEditCheckin = async (checkinId: string) => {
     if (!editChildEmoji || !editTeacherEmoji) return;
+    if (!editEmotionAcademicYear || !editEmotionTerm) return;
     try {
       const res = await fetch(
         `${API_BASE}/students/emotion-checkin/${checkinId}`,
@@ -470,6 +560,8 @@ export default function AdminStudentHistoryPage({
           body: JSON.stringify({
             childEmoji: editChildEmoji,
             teacherEmoji: editTeacherEmoji,
+            academicYear: editEmotionAcademicYear,
+            term: editEmotionTerm,
           }),
         }
       );
@@ -497,8 +589,44 @@ export default function AdminStudentHistoryPage({
     }
   };
 
+  // The history page lives at /dashboard/admin/students/[studentId]/history,
+  // but conceptually sits under Branch > Education Stage > Grade — the same
+  // folders an admin drilled through on the Branches page to get here. Build
+  // that path from the student's actual branch/grade so the breadcrumb
+  // reflects it instead of the literal (meaningless) URL segments.
+  let middleCrumbs: { href: string; label: string }[] | undefined;
+  if (studentRecord?.branch) {
+    const branchHref = `/dashboard/admin/students/branch/${encodeURIComponent(
+      studentRecord.branch
+    )}`;
+    middleCrumbs = [{ href: branchHref, label: studentRecord.branch }];
+
+    const stage = categoryForGrade(studentRecord.grade);
+    const gradeSlug = gradeSlugForValue(studentRecord.grade);
+    if (stage) {
+      const stageHref = `${branchHref}/${stage.slug}`;
+      middleCrumbs.push({ href: stageHref, label: stage.label });
+
+      if (gradeSlug) {
+        middleCrumbs.push({
+          href: `${stageHref}/${gradeSlug}`,
+          label: studentRecord.grade,
+        });
+      }
+    }
+  }
+
   return (
-    <DashboardLayout>
+    <DashboardLayout
+      breadcrumbLabels={
+        studentRecord
+          ? {
+              [studentId]: studentRecord.fullName,
+            }
+          : undefined
+      }
+      breadcrumbMiddleCrumbs={middleCrumbs}
+    >
       <BackButton />
 
       <div className="flex items-center justify-between mt-2 mb-8">
@@ -521,7 +649,7 @@ export default function AdminStudentHistoryPage({
       ) : (
         <>
           <div className="bg-white rounded-md shadow-sm p-6 mb-6">
-            <div className="flex items-center justify-between gap-6 flex-wrap">
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-3">
               <div className="flex items-center gap-3">
                 <p className="text-sm font-semibold text-gray-700 whitespace-nowrap">
                   Needs Attention Flag
@@ -532,13 +660,6 @@ export default function AdminStudentHistoryPage({
                   </span>
                 )}
               </div>
-              <textarea
-                value={flagNote}
-                onChange={(e) => setFlagNote(e.target.value)}
-                placeholder="Optional note for the principal (e.g. reason for concern)"
-                rows={1}
-                className="flex-1 min-w-[240px] text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
-              />
               <button
                 onClick={toggleFlag}
                 disabled={savingFlag}
@@ -550,6 +671,27 @@ export default function AdminStudentHistoryPage({
               >
                 {savingFlag ? "Saving..." : flagged ? "Clear Flag" : "Flag for Attention"}
               </button>
+            </div>
+            <div className="flex gap-3 flex-wrap">
+              <select
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                className="text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400 min-w-[220px]"
+              >
+                <option value="">Select a reason (optional)</option>
+                {FLAG_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={flagNote}
+                onChange={(e) => setFlagNote(e.target.value)}
+                placeholder="Further clarification for the principal (optional)"
+                rows={1}
+                className="flex-1 min-w-[240px] text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
+              />
             </div>
           </div>
 
@@ -595,21 +737,12 @@ export default function AdminStudentHistoryPage({
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="First Name">
+                  <ProfileField label="Full Name">
                     <input
                       className="profile-input"
-                      value={profileForm.firstName}
+                      value={profileForm.fullName}
                       onChange={(e) =>
-                        updateProfileField("firstName", e.target.value)
-                      }
-                    />
-                  </ProfileField>
-                  <ProfileField label="Last Name">
-                    <input
-                      className="profile-input"
-                      value={profileForm.lastName}
-                      onChange={(e) =>
-                        updateProfileField("lastName", e.target.value)
+                        updateProfileField("fullName", e.target.value)
                       }
                     />
                   </ProfileField>
@@ -647,13 +780,18 @@ export default function AdminStudentHistoryPage({
                     />
                   </ProfileField>
                   <ProfileField label="Section">
-                    <input
+                    <select
                       className="profile-input"
                       value={profileForm.section}
                       onChange={(e) =>
                         updateProfileField("section", e.target.value)
                       }
-                    />
+                    >
+                      <option value="">Select</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                    </select>
                   </ProfileField>
                   <ProfileField label="Primary Diagnosis">
                     <input
@@ -801,6 +939,7 @@ export default function AdminStudentHistoryPage({
                 `}</style>
               </form>
             ) : studentRecord ? (
+              <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
                 <InfoRow label="Branch" value={studentRecord.branch} />
                 <InfoRow
@@ -809,7 +948,7 @@ export default function AdminStudentHistoryPage({
                 />
                 <InfoRow
                   label="Name"
-                  value={`${studentRecord.firstName} ${studentRecord.lastName}`}
+                  value={studentRecord.fullName}
                 />
                 <InfoRow
                   label="Date of Birth"
@@ -858,6 +997,45 @@ export default function AdminStudentHistoryPage({
                   value={studentRecord.parentPhone}
                 />
               </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-xs text-gray-400">Shadow Teacher</p>
+                  <p className="text-gray-800 font-medium text-sm">
+                    {studentRecord.assignedTeacher?.name || "Unassigned"}
+                  </p>
+                </div>
+                {studentRecord.assignedTeacher && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-gray-400 tracking-wide">
+                      Contact Shadow Teacher:
+                    </span>
+                    {studentRecord.assignedTeacher.phone && (
+                      <a
+                        href={`tel:${studentRecord.assignedTeacher.phone}`}
+                        className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
+                      >
+                        📞 {studentRecord.assignedTeacher.phone}
+                      </a>
+                    )}
+                    {studentRecord.assignedTeacher.email && (
+                      <a
+                        href={`mailto:${studentRecord.assignedTeacher.email}`}
+                        className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
+                      >
+                        ✉️ {studentRecord.assignedTeacher.email}
+                      </a>
+                    )}
+                    {!studentRecord.assignedTeacher.phone &&
+                      !studentRecord.assignedTeacher.email && (
+                        <span className="text-xs text-gray-400">
+                          No contact details on file
+                        </span>
+                      )}
+                  </div>
+                )}
+              </div>
+              </>
             ) : (
               <p className="text-gray-400 text-sm">
                 Student profile unavailable.
@@ -891,6 +1069,33 @@ export default function AdminStudentHistoryPage({
                     {symptom}
                   </label>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <select
+                  value={newSymptomAcademicYear}
+                  onChange={(e) => setNewSymptomAcademicYear(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                >
+                  <option value="">Academic Year</option>
+                  {academicYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={newSymptomTerm}
+                  onChange={(e) => setNewSymptomTerm(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                >
+                  <option value="">Term</option>
+                  {TERMS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <textarea
@@ -943,6 +1148,32 @@ export default function AdminStudentHistoryPage({
                             </label>
                           ))}
                         </div>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <select
+                            value={editSymptomAcademicYear}
+                            onChange={(e) => setEditSymptomAcademicYear(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                          >
+                            <option value="">Academic Year</option>
+                            {academicYears.map((y) => (
+                              <option key={y} value={y}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editSymptomTerm}
+                            onChange={(e) => setEditSymptomTerm(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                          >
+                            <option value="">Term</option>
+                            {TERMS.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <textarea
                           value={editNotes}
                           onChange={(e) => setEditNotes(e.target.value)}
@@ -972,6 +1203,16 @@ export default function AdminStudentHistoryPage({
                         <div>
                           <p className="text-xs text-gray-400">
                             {new Date(log.createdAt).toLocaleString()}
+                            {" · Recorded by "}
+                            {formatRecordedBy(log.teacher)}
+                            {log.academicYear && log.term && (
+                              <>
+                                {" · "}
+                                <span className="text-blue-700 bg-blue-50 rounded px-1.5 py-0.5">
+                                  {log.academicYear} {log.term}
+                                </span>
+                              </>
+                            )}
                           </p>
                           <p className="text-sm text-gray-800 mt-1">
                             {log.symptoms.join(", ")}
@@ -996,15 +1237,19 @@ export default function AdminStudentHistoryPage({
                         <div className="flex gap-3 shrink-0">
                           <button
                             onClick={() => startEditLog(log)}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-gray-300 hover:text-blue-600 transition-colors"
+                            aria-label="Edit symptom log"
+                            title="Edit"
                           >
-                            Edit
+                            <PencilIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteLog(log._id)}
-                            className="text-xs text-red-500 hover:underline"
+                            className="text-gray-300 hover:text-red-500 transition-colors"
+                            aria-label="Delete symptom log"
+                            title="Delete"
                           >
-                            Delete
+                            <TrashIcon className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -1061,6 +1306,33 @@ export default function AdminStudentHistoryPage({
                     {opt.icon}
                   </button>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <select
+                  value={newEmotionAcademicYear}
+                  onChange={(e) => setNewEmotionAcademicYear(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                >
+                  <option value="">Academic Year</option>
+                  {academicYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={newEmotionTerm}
+                  onChange={(e) => setNewEmotionTerm(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                >
+                  <option value="">Term</option>
+                  {TERMS.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {emotionStatus && (
@@ -1123,6 +1395,32 @@ export default function AdminStudentHistoryPage({
                             </button>
                           ))}
                         </div>
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <select
+                            value={editEmotionAcademicYear}
+                            onChange={(e) => setEditEmotionAcademicYear(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                          >
+                            <option value="">Academic Year</option>
+                            {academicYears.map((y) => (
+                              <option key={y} value={y}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editEmotionTerm}
+                            onChange={(e) => setEditEmotionTerm(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-md px-2 py-2 outline-none focus:border-blue-400"
+                          >
+                            <option value="">Term</option>
+                            {TERMS.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={() => saveEditCheckin(c._id)}
@@ -1146,6 +1444,14 @@ export default function AdminStudentHistoryPage({
                         <div>
                           <p className="text-xs text-gray-400">
                             {new Date(c.createdAt).toLocaleString()}
+                            {c.academicYear && c.term && (
+                              <>
+                                {" · "}
+                                <span className="text-blue-700 bg-blue-50 rounded px-1.5 py-0.5">
+                                  {c.academicYear} {c.term}
+                                </span>
+                              </>
+                            )}
                           </p>
                           <p className="text-lg mt-1">
                             {(c.childEmoji && EMOJI_ICON[c.childEmoji]) || "—"}{" "}
@@ -1158,15 +1464,19 @@ export default function AdminStudentHistoryPage({
                         <div className="flex gap-3 shrink-0">
                           <button
                             onClick={() => startEditCheckin(c)}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-gray-300 hover:text-blue-600 transition-colors"
+                            aria-label="Edit emotion check-in"
+                            title="Edit"
                           >
-                            Edit
+                            <PencilIcon className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteCheckin(c._id)}
-                            className="text-xs text-red-500 hover:underline"
+                            className="text-gray-300 hover:text-red-500 transition-colors"
+                            aria-label="Delete emotion check-in"
+                            title="Delete"
                           >
-                            Delete
+                            <TrashIcon className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -1208,5 +1518,42 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-gray-400">{label}</p>
       <p className="text-gray-800">{value || "—"}</p>
     </div>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 4.5l3.75 3.75" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"
+      />
+    </svg>
   );
 }

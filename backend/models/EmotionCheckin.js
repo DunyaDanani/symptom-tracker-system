@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { TERMS } from "./AcademicTerm.js";
 
 // Emoji scale used by both child and teacher, mapped to a numeric score
 // so we can compute a combined average automatically.
@@ -43,6 +44,23 @@ const emotionCheckinSchema = new mongoose.Schema(
       type: Number,
     },
 
+    // Academic Year / Term this check-in belongs to. Manually chosen on
+    // the teacher/admin-facing forms; auto-derived from today's date
+    // against the configured AcademicTerm calendar when the child's own
+    // one-tap self check-in creates the day's record first (see
+    // studentController.submitChildEmotionCheckin) — kept optional since a
+    // date outside any configured term shouldn't block the child's check-in.
+    academicYear: {
+      type: String,
+      trim: true,
+    },
+
+    term: {
+      type: String,
+      enum: ["", ...TERMS],
+      default: "",
+    },
+
     sessionDate: {
       type: Date,
       default: Date.now,
@@ -68,7 +86,7 @@ const emotionCheckinSchema = new mongoose.Schema(
 // Automatically compute the composite score before saving. If only one
 // side (child or teacher) has checked in so far, the score is just that
 // one value — it's recalculated as an average once both are present.
-emotionCheckinSchema.pre("save", function (next) {
+emotionCheckinSchema.pre("save", function () {
   const childScore = this.childEmoji ? EMOJI_SCORES[this.childEmoji] : null;
   const teacherScore = this.teacherEmoji
     ? EMOJI_SCORES[this.teacherEmoji]
@@ -81,7 +99,6 @@ emotionCheckinSchema.pre("save", function (next) {
   } else if (teacherScore !== null) {
     this.compositeScore = teacherScore;
   }
-  next();
 });
 
 const EmotionCheckin = mongoose.model("EmotionCheckin", emotionCheckinSchema);

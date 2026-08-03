@@ -6,10 +6,10 @@ import TeacherProfile from "../models/TeacherProfile.js";
 import TeacherAssignmentRequest from "../models/TeacherAssignmentRequest.js";
 import { BRANCHES } from "../models/Student.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
-import EmotionCheckin, { EMOJI_SCORES } from "../models/EmotionCheckin.js";
+import EmotionCheckin from "../models/EmotionCheckin.js";
 import BreakActivityLog from "../models/BreakActivityLog.js";
+import AcademicTerm, { TERMS } from "../models/AcademicTerm.js";
 import {
-  generateStudentCredentials,
   generateParentCredentials,
   generateTeacherCredentials,
 } from "../utils/credentialUtils.js";
@@ -18,9 +18,7 @@ import {
   raiseManualFlagAlert,
   clearManualFlagAlert,
 } from "../utils/alertEngine.js";
-import { buildActivityPlan } from "../utils/activityPlanEngine.js";
 import { isValidEmail } from "../utils/validators.js";
-import { currentCheckinContext } from "../utils/schoolHours.js";
 import { sendEmail } from "../utils/mailer.js";
 import { buildReportHtml } from "../utils/reportHtml.js";
 import { renderPdfFromHtml } from "../utils/pdfGenerator.js";
@@ -42,10 +40,10 @@ export const registerStudent = async (req, res) => {
   const {
     branch,
     admissionNumber,
-    firstName,
-    lastName,
+    fullName,
     dateOfBirth,
     gender,
+    programCategory,
     grade,
     section,
     diagnosis,
@@ -58,16 +56,16 @@ export const registerStudent = async (req, res) => {
     parentPhone,
     homeCity,
     assignedTeacherId, // optional - existing teacher's User _id
-    newTeacher, // optional - { title, name, age, qualification, specialization, experienceYears }
+    newTeacher, // optional - { title, name, age, qualification, specialization, experienceYears, email, phone, nic }
   } = req.body;
 
   if (
     !branch ||
     !admissionNumber ||
-    !firstName ||
-    !lastName ||
+    !fullName ||
     !dateOfBirth ||
     !gender ||
+    !programCategory ||
     !grade ||
     !diagnosis ||
     !parentFirstName ||
@@ -91,6 +89,13 @@ export const registerStudent = async (req, res) => {
     return res.status(400).json({
       success: false,
       message: "Invalid branch",
+    });
+  }
+
+  if (!["national", "cambridge"].includes(programCategory)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid category",
     });
   }
 
@@ -126,26 +131,13 @@ export const registerStudent = async (req, res) => {
 
     credentials = {};
 
-    // 1. Create the student's login account — username = admission number,
-    // password = same, so it's short and easy for a child to use.
-    const { username: studentUsername, password: studentTempPassword } =
-      await generateStudentCredentials(admissionNumber, User, session);
-    const studentHashedPassword = await bcrypt.hash(studentTempPassword, 10);
+    // Note: the child no longer gets a login account. There is no child
+    // dashboard — emotion check-ins are recorded by the shadow teacher on
+    // the child's behalf (see teacherController.submitChildEmojiCheckin /
+    // submitEmotionCheckin), so a separate student User + credentials
+    // would never be used.
 
-    const studentUser = new User({
-      username: studentUsername,
-      password: studentHashedPassword,
-      role: "child",
-      name: `${firstName} ${lastName}`,
-    });
-    await studentUser.save({ session });
-
-    credentials.student = {
-      username: studentUsername,
-      password: studentTempPassword,
-    };
-
-    // 2. Create the parent's login account — username = first name + last
+    // 1. Create the parent's login account — username = first name + last
     // 3 digits of the student's admission number, password = same.
     const { username: parentUsername, password: parentTempPassword } =
       await generateParentCredentials(parentFirstName, admissionNumber, User, session);
@@ -257,6 +249,7 @@ export const registerStudent = async (req, res) => {
         title: newTeacher.title || "",
         name: newTeacher.name,
         email: trimmedTeacherEmail || null,
+        phone: newTeacher.phone ? newTeacher.phone.trim() : null,
       });
       await teacherUser.save({ session });
 
@@ -268,6 +261,7 @@ export const registerStudent = async (req, res) => {
             qualification: newTeacher.qualification,
             specialization: newTeacher.specialization,
             experienceYears: newTeacher.experienceYears,
+            nic: newTeacher.nic ? newTeacher.nic.trim() : "",
           },
         ],
         { session }
@@ -299,10 +293,10 @@ export const registerStudent = async (req, res) => {
     const newStudent = new Student({
       branch,
       admissionNumber: admissionNumber.trim(),
-      firstName,
-      lastName,
+      fullName,
       dateOfBirth,
       gender,
+      programCategory,
       grade,
       section,
       diagnosis,
@@ -314,7 +308,6 @@ export const registerStudent = async (req, res) => {
       parentEmail,
       parentPhone,
       homeCity,
-      studentUser: studentUser._id,
       parentUser: parentUser._id,
       assignedTeacher,
       status,
@@ -375,18 +368,13 @@ export const registerStudent = async (req, res) => {
       subject: "Your OKI International School account",
       html: `
         <p>Hello ${parentTitle ? `${parentTitle} ` : ""}${parentFirstName},</p>
-        <p>${firstName} ${lastName} has been admitted successfully. Here are your login credentials:</p>
+        <p>${fullName} has been admitted successfully. Here are your login credentials:</p>
         <p>
           <strong>Parent login</strong><br/>
           Username: ${credentials.parent.username}<br/>
           Password: ${credentials.parent.password}
         </p>
-        <p>
-          <strong>Student login</strong><br/>
-          Username: ${credentials.student.username}<br/>
-          Password: ${credentials.student.password}
-        </p>
-        <p>Please log in and change these passwords when convenient.</p>
+        <p>Please log in and change this password when convenient.</p>
       `,
     });
     emailSent = true;
@@ -430,7 +418,7 @@ export const registerStudent = async (req, res) => {
 export const getAllStudents = async (req, res) => {
   try {
     const students = await Student.find()
-      .populate("assignedTeacher", "name username")
+      .populate("assignedTeacher", "name username email phone")
       .populate("parentUser", "name username")
       .populate("studentUser", "name username")
       .sort({ createdAt: -1 });
@@ -455,7 +443,7 @@ export const getAllStudents = async (req, res) => {
 export const getAvailableTeachers = async (req, res) => {
   try {
     const teachers = await User.find({ role: "shadow_teacher" }).select(
-      "name username email"
+      "name username email phone"
     );
 
     const teacherIds = teachers.map((t) => t._id);
@@ -501,10 +489,12 @@ export const getAvailableTeachers = async (req, res) => {
         name: t.name,
         username: t.username,
         email: t.email || null,
+        phone: t.phone || null,
         qualification: profileMap[key]?.qualification || "",
         specialization: profileMap[key]?.specialization || "",
         experienceYears: profileMap[key]?.experienceYears || 0,
         age: profileMap[key]?.age || null,
+        nic: profileMap[key]?.nic || "",
         isAssigned: assignedSet.has(key),
         myRequestStatus: myRequest?.status || null, // "pending" | "approved" | "denied" | null
         myRequestId: myRequest?._id || null,
@@ -526,14 +516,22 @@ export const getAvailableTeachers = async (req, res) => {
 
 // @route   PATCH /api/students/teachers/:id
 // @access  Admin only
-// Lets admin edit an existing shadow teacher's account (name, email) and
-// profile (qualification, specialization, experienceYears, age) after
-// creation — mirrors updatePrincipal in staffController.js.
-// Body: { name?, email?, qualification?, specialization?, experienceYears?, age? }
+// Lets admin edit an existing shadow teacher's account (name, email, phone)
+// and profile (qualification, specialization, experienceYears, age, nic)
+// after creation — mirrors updatePrincipal in staffController.js.
+// Body: { name?, email?, phone?, qualification?, specialization?, experienceYears?, age?, nic? }
 export const updateTeacherAccount = async (req, res) => {
   const { id } = req.params;
-  const { name, email, qualification, specialization, experienceYears, age } =
-    req.body;
+  const {
+    name,
+    email,
+    phone,
+    qualification,
+    specialization,
+    experienceYears,
+    age,
+    nic,
+  } = req.body;
 
   try {
     const teacher = await User.findOne({ _id: id, role: "shadow_teacher" });
@@ -568,6 +566,7 @@ export const updateTeacherAccount = async (req, res) => {
     }
 
     if (name && name.trim()) teacher.name = name.trim();
+    if (typeof phone === "string") teacher.phone = phone.trim() || null;
     await teacher.save();
 
     let profile = await TeacherProfile.findOne({ user: teacher._id });
@@ -579,6 +578,7 @@ export const updateTeacherAccount = async (req, res) => {
     if (experienceYears !== undefined)
       profile.experienceYears = Number(experienceYears) || 0;
     if (age !== undefined) profile.age = age === "" ? null : Number(age);
+    if (nic !== undefined) profile.nic = nic;
     await profile.save();
 
     res.json({
@@ -589,213 +589,13 @@ export const updateTeacherAccount = async (req, res) => {
         name: teacher.name,
         username: teacher.username,
         email: teacher.email,
+        phone: teacher.phone,
         qualification: profile.qualification,
         specialization: profile.specialization,
         experienceYears: profile.experienceYears,
         age: profile.age,
+        nic: profile.nic,
       },
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-  }
-};
-
-// @route   GET /api/students/me
-// @access  Child only (their own profile)
-export const getMyProfile = async (req, res) => {
-  try {
-    const student = await Student.findOne({ studentUser: req.user.id })
-      .populate("assignedTeacher", "name username")
-      .populate("parentUser", "name username");
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student profile not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      student,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-  }
-};
-
-// @route   GET /api/students/emotion-checkin/today
-// @access  Child only
-// Returns today's emotion check-in for the logged-in child, if one exists
-// yet (either side may have already submitted).
-export const getMyTodayEmotionCheckin = async (req, res) => {
-  try {
-    const student = await Student.findOne({ studentUser: req.user.id });
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student profile not found",
-      });
-    }
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const checkin = await EmotionCheckin.findOne({
-      student: student._id,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    });
-
-    res.json({
-      success: true,
-      checkin: checkin || null,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-  }
-};
-
-// @route   POST /api/students/emotion-checkin
-// @access  Child only
-// Body: { emoji }
-// The child's own self-report — independent of the teacher's observation.
-// Finds or creates today's check-in and sets just the childEmoji side.
-export const submitChildEmotionCheckin = async (req, res) => {
-  const { emoji } = req.body;
-
-  try {
-    if (!emoji || !Object.keys(EMOJI_SCORES).includes(emoji)) {
-      return res.status(400).json({
-        success: false,
-        message: "A valid emoji is required",
-      });
-    }
-
-    const student = await Student.findOne({ studentUser: req.user.id });
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student profile not found",
-      });
-    }
-
-    if (!student.assignedTeacher) {
-      return res.status(400).json({
-        success: false,
-        message: "No shadow teacher is assigned yet",
-      });
-    }
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    let checkin = await EmotionCheckin.findOne({
-      student: student._id,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    });
-
-    // Tag whichever check-in this touches with the context it was
-    // submitted in — a same-day resubmission (e.g. child updates their
-    // mood again in the evening) shifts the tag to "home" too, since
-    // that's the more recent, more relevant context for the activity plan.
-    const context = currentCheckinContext();
-
-    if (checkin) {
-      checkin.childEmoji = emoji;
-      checkin.context = context;
-      await checkin.save();
-    } else {
-      checkin = await EmotionCheckin.create({
-        student: student._id,
-        teacher: student.assignedTeacher,
-        childEmoji: emoji,
-        context,
-      });
-    }
-
-    // FR-10: re-check alert thresholds now that the composite score may
-    // have changed.
-    await evaluateThresholds(student._id);
-
-    res.json({
-      success: true,
-      checkin,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-  }
-};
-
-// @route   GET /api/students/activity-plan
-// @access  Child only
-// FR-09/FR-12: builds today's personalised, icon-based activity plan from
-// the child's own composite emotion score (once either side has checked
-// in) and today's logged symptoms. Deterministic rules engine — see
-// utils/activityPlanEngine.js — rather than a trained model. Works
-// whenever the child opens this page, school hours or not — the plan is
-// always computed live from whatever's been logged today so far, there's
-// no time gate anywhere in this flow.
-export const getMyActivityPlan = async (req, res) => {
-  try {
-    const student = await Student.findOne({ studentUser: req.user.id });
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student profile not found",
-      });
-    }
-
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const [checkin, symptomLogs] = await Promise.all([
-      EmotionCheckin.findOne({
-        student: student._id,
-        createdAt: { $gte: startOfDay, $lte: endOfDay },
-      }),
-      SymptomLog.find({
-        student: student._id,
-        createdAt: { $gte: startOfDay, $lte: endOfDay },
-      }).select("symptoms"),
-    ]);
-
-    const score = checkin?.compositeScore ?? null;
-    const symptoms = symptomLogs.flatMap((log) => log.symptoms);
-
-    const plan = buildActivityPlan(score, symptoms);
-
-    // Prefer the tag already saved on today's check-in (set the moment the
-    // child submitted); fall back to "right now" if they haven't checked
-    // in yet today but are still browsing the activity plan.
-    const context = checkin?.context || currentCheckinContext();
-
-    res.json({
-      success: true,
-      band: plan.band,
-      context,
-      cards: plan.cards,
     });
   } catch (error) {
     console.error(error);
@@ -844,16 +644,6 @@ export const getStudentHistory = async (req, res) => {
       });
     }
 
-    if (
-      req.user.role === "child" &&
-      student.studentUser?.toString() !== req.user.id
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "This is not your profile",
-      });
-    }
-
     if (req.user.role === "principal" && student.branch !== req.user.branch) {
       return res.status(403).json({
         success: false,
@@ -862,7 +652,9 @@ export const getStudentHistory = async (req, res) => {
     }
 
     const [symptomLogs, emotionCheckins] = await Promise.all([
-      SymptomLog.find({ student: studentId }).sort({ createdAt: -1 }),
+      SymptomLog.find({ student: studentId })
+        .populate("teacher", "name role")
+        .sort({ createdAt: -1 }),
       EmotionCheckin.find({ student: studentId }).sort({ createdAt: -1 }),
     ]);
 
@@ -943,7 +735,7 @@ export const getStudentProfile = async (req, res) => {
 
   try {
     const student = await Student.findById(studentId)
-      .populate("assignedTeacher", "name username")
+      .populate("assignedTeacher", "name username email phone")
       .populate("parentUser", "name username");
 
     if (!student) {
@@ -970,16 +762,6 @@ export const getStudentProfile = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "This student is not assigned to you",
-      });
-    }
-
-    if (
-      req.user.role === "child" &&
-      student.studentUser?.toString() !== req.user.id
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "This is not your profile",
       });
     }
 
@@ -1008,7 +790,7 @@ export const getStudentProfile = async (req, res) => {
 export const getMyChild = async (req, res) => {
   try {
     const student = await Student.findOne({ parentUser: req.user.id })
-      .populate("assignedTeacher", "name username")
+      .populate("assignedTeacher", "name username email phone")
       .populate("studentUser", "name username");
 
     if (!student) {
@@ -1032,22 +814,16 @@ export const getMyChild = async (req, res) => {
 };
 
 // @route   GET /api/students/linked
-// @access  Parent or Child
-// Resolves "my linked student record" regardless of which side of the
-// relationship is calling — the parent (via parentUser) or the child
-// themself (via studentUser). Lets dashboard pages shared between the two
-// roles fetch through one endpoint instead of branching on role.
+// @access  Parent only
+// Resolves "my linked student record" for the logged-in parent. (There is
+// no child login/dashboard, so this used to also handle the child side of
+// the relationship via studentUser — that branch was removed along with
+// the child dashboard.)
 export const getLinkedStudent = async (req, res) => {
   try {
-    const filter =
-      req.user.role === "child"
-        ? { studentUser: req.user.id }
-        : { parentUser: req.user.id };
-
-    const student = await Student.findOne(filter)
-      .populate("assignedTeacher", "name username")
-      .populate("parentUser", "name username")
-      .populate("studentUser", "name username");
+    const student = await Student.findOne({ parentUser: req.user.id })
+      .populate("assignedTeacher", "name username email phone")
+      .populate("parentUser", "name username");
 
     if (!student) {
       return res.status(404).json({
@@ -1069,7 +845,7 @@ export const getLinkedStudent = async (req, res) => {
   }
 };
 
-// @route   GET /api/students/:studentId/symptom-trends?range=weekly|monthly|quarterly
+// @route   GET /api/students/:studentId/symptom-trends?range=weekly|monthly|quarterly|term
 // @access  Child (own only), Parent (own child only), Shadow Teacher
 // (assigned only), Class Teacher (own branch only), Admin/Principal
 // (any student).
@@ -1077,11 +853,15 @@ export const getLinkedStudent = async (req, res) => {
 // chart. "weekly" = one bucket per day for the last 7 days. "monthly" =
 // one bucket per week for the last ~5 weeks. "quarterly" = one bucket per
 // month for the last ~3 months — client meeting 20 Feb 2026's "3-Month
-// Final Conclusion Report".
+// Final Conclusion Report". "term" buckets by week across the exact
+// start/end date range of one configured Academic Term, so a term's
+// conclusion report reflects that term only — not a rolling window.
 // Shared by getSymptomTrends and getStudentReportPdf — buckets a student's
 // symptom counts over the requested range. Assumes the caller has already
 // verified the student exists and the requester has access to it.
-async function computeTrendBuckets(studentId, range) {
+// `termWindow` is only used when range === "term": { start: Date, end: Date }
+// resolved from the AcademicTerm the caller asked for.
+async function computeTrendBuckets(studentId, range, termWindow) {
   const now = new Date();
   const bucketCount = range === "quarterly" ? 3 : range === "monthly" ? 5 : 7;
   // "quarterly" buckets by calendar month rather than a fixed day count,
@@ -1089,53 +869,86 @@ async function computeTrendBuckets(studentId, range) {
   // month before" for the final conclusion report.
   const bucketSizeDays = range === "monthly" ? 7 : 1;
 
-  const rangeStart = new Date(now);
-  rangeStart.setHours(0, 0, 0, 0);
-  if (range === "quarterly") {
-    rangeStart.setDate(1);
-    rangeStart.setMonth(rangeStart.getMonth() - (bucketCount - 1));
+  let rangeStart;
+  let rangeEnd = now;
+
+  if (range === "term") {
+    rangeStart = new Date(termWindow.start);
+    rangeEnd = new Date(termWindow.end);
   } else {
-    rangeStart.setDate(rangeStart.getDate() - bucketCount * bucketSizeDays + 1);
+    rangeStart = new Date(now);
+    rangeStart.setHours(0, 0, 0, 0);
+    if (range === "quarterly") {
+      rangeStart.setDate(1);
+      rangeStart.setMonth(rangeStart.getMonth() - (bucketCount - 1));
+    } else {
+      rangeStart.setDate(
+        rangeStart.getDate() - bucketCount * bucketSizeDays + 1
+      );
+    }
   }
 
   const logs = await SymptomLog.find({
     student: studentId,
-    createdAt: { $gte: rangeStart },
+    createdAt: { $gte: rangeStart, $lte: rangeEnd },
   }).select("symptoms createdAt");
 
-  const buckets =
-    range === "quarterly"
-      ? Array.from({ length: bucketCount }, (_, i) => {
-          const bucketStart = new Date(rangeStart);
-          bucketStart.setMonth(bucketStart.getMonth() + i);
-          const bucketEnd = new Date(bucketStart);
-          bucketEnd.setMonth(bucketEnd.getMonth() + 1);
+  let buckets;
+  if (range === "term") {
+    // Weekly buckets spanning the exact term window, however long it is.
+    const totalDays = Math.max(
+      1,
+      Math.ceil((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24))
+    );
+    const termBucketCount = Math.min(20, Math.max(1, Math.ceil(totalDays / 7)));
+    buckets = Array.from({ length: termBucketCount }, (_, i) => {
+      const bucketStart = new Date(rangeStart);
+      bucketStart.setDate(bucketStart.getDate() + i * 7);
+      const bucketEnd = new Date(bucketStart);
+      bucketEnd.setDate(bucketEnd.getDate() + 7);
+      if (bucketEnd > rangeEnd) bucketEnd.setTime(rangeEnd.getTime());
 
-          const label = bucketStart.toLocaleDateString("default", {
-            month: "short",
-            year: "numeric",
-          });
+      const label = bucketStart.toLocaleDateString("default", {
+        month: "short",
+        day: "numeric",
+      });
 
-          return { label, start: bucketStart, end: bucketEnd, count: 0 };
-        })
-      : Array.from({ length: bucketCount }, (_, i) => {
-          const bucketStart = new Date(rangeStart);
-          bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
-          const bucketEnd = new Date(bucketStart);
-          bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
+      return { label, start: bucketStart, end: bucketEnd, count: 0 };
+    });
+  } else if (range === "quarterly") {
+    buckets = Array.from({ length: bucketCount }, (_, i) => {
+      const bucketStart = new Date(rangeStart);
+      bucketStart.setMonth(bucketStart.getMonth() + i);
+      const bucketEnd = new Date(bucketStart);
+      bucketEnd.setMonth(bucketEnd.getMonth() + 1);
 
-          const label =
-            range === "monthly"
-              ? `${bucketStart.toLocaleDateString("default", {
-                  month: "short",
-                  day: "numeric",
-                })}`
-              : bucketStart.toLocaleDateString("default", {
-                  weekday: "short",
-                });
+      const label = bucketStart.toLocaleDateString("default", {
+        month: "short",
+        year: "numeric",
+      });
 
-          return { label, start: bucketStart, end: bucketEnd, count: 0 };
-        });
+      return { label, start: bucketStart, end: bucketEnd, count: 0 };
+    });
+  } else {
+    buckets = Array.from({ length: bucketCount }, (_, i) => {
+      const bucketStart = new Date(rangeStart);
+      bucketStart.setDate(bucketStart.getDate() + i * bucketSizeDays);
+      const bucketEnd = new Date(bucketStart);
+      bucketEnd.setDate(bucketEnd.getDate() + bucketSizeDays);
+
+      const label =
+        range === "monthly"
+          ? `${bucketStart.toLocaleDateString("default", {
+              month: "short",
+              day: "numeric",
+            })}`
+          : bucketStart.toLocaleDateString("default", {
+              weekday: "short",
+            });
+
+      return { label, start: bucketStart, end: bucketEnd, count: 0 };
+    });
+  }
 
   for (const log of logs) {
     const bucket = buckets.find(
@@ -1147,9 +960,21 @@ async function computeTrendBuckets(studentId, range) {
   return buckets.map((b) => ({ label: b.label, count: b.count }));
 }
 
+// Looks up the AcademicTerm matching the requested academicYear + term
+// query params, used by both getSymptomTrends and getStudentReportPdf when
+// range === "term". Returns null if either param is missing or no matching
+// term is configured, so callers can 400 with a clear message.
+async function resolveRequestedTermWindow(query) {
+  const { academicYear, term } = query;
+  if (!academicYear || !term) return null;
+  const found = await AcademicTerm.findOne({ academicYear, term });
+  if (!found) return null;
+  return { start: found.startDate, end: found.endDate };
+}
+
 export const getSymptomTrends = async (req, res) => {
   const { studentId } = req.params;
-  const range = ["monthly", "quarterly"].includes(req.query.range)
+  const range = ["monthly", "quarterly", "term"].includes(req.query.range)
     ? req.query.range
     : "weekly";
 
@@ -1163,8 +988,6 @@ export const getSymptomTrends = async (req, res) => {
     }
 
     if (
-      (req.user.role === "child" &&
-        student.studentUser?.toString() !== req.user.id) ||
       (req.user.role === "parent" &&
         student.parentUser?.toString() !== req.user.id) ||
       (req.user.role === "shadow_teacher" &&
@@ -1179,7 +1002,19 @@ export const getSymptomTrends = async (req, res) => {
       });
     }
 
-    const trend = await computeTrendBuckets(studentId, range);
+    let termWindow;
+    if (range === "term") {
+      termWindow = await resolveRequestedTermWindow(req.query);
+      if (!termWindow) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Select a valid academic year and term to view a by-term report.",
+        });
+      }
+    }
+
+    const trend = await computeTrendBuckets(studentId, range, termWindow);
 
     res.json({
       success: true,
@@ -1206,13 +1041,13 @@ const REPORT_RANGE_DAYS = { weekly: 7, monthly: 35, quarterly: 92 };
 
 export const getStudentReportPdf = async (req, res) => {
   const { studentId } = req.params;
-  const range = ["monthly", "quarterly"].includes(req.query.range)
+  const range = ["monthly", "quarterly", "term"].includes(req.query.range)
     ? req.query.range
     : "weekly";
 
   try {
     const student = await Student.findById(studentId)
-      .populate("assignedTeacher", "name username")
+      .populate("assignedTeacher", "name username email phone")
       .populate("parentUser", "name username");
 
     if (!student) {
@@ -1242,15 +1077,6 @@ export const getStudentReportPdf = async (req, res) => {
       });
     }
 
-    if (
-      req.user.role === "child" &&
-      student.studentUser?.toString() !== req.user.id
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "This is not your profile",
-      });
-    }
 
     if (req.user.role === "principal" && student.branch !== req.user.branch) {
       return res.status(403).json({
@@ -1259,19 +1085,42 @@ export const getStudentReportPdf = async (req, res) => {
       });
     }
 
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - REPORT_RANGE_DAYS[range]);
+    let termWindow;
+    let termLabel;
+    if (range === "term") {
+      termWindow = await resolveRequestedTermWindow(req.query);
+      if (!termWindow) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Select a valid academic year and term to generate a by-term report.",
+        });
+      }
+      termLabel = `${req.query.academicYear} ${req.query.term}`;
+    }
+
+    const rangeStart =
+      range === "term"
+        ? termWindow.start
+        : (() => {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - REPORT_RANGE_DAYS[range]);
+            return cutoff;
+          })();
+    const rangeEnd = range === "term" ? termWindow.end : new Date();
 
     const [symptomLogs, emotionCheckins, trend, requester] = await Promise.all([
       SymptomLog.find({
         student: studentId,
-        createdAt: { $gte: cutoff },
-      }).sort({ createdAt: -1 }),
+        createdAt: { $gte: rangeStart, $lte: rangeEnd },
+      })
+        .populate("teacher", "name role")
+        .sort({ createdAt: -1 }),
       EmotionCheckin.find({
         student: studentId,
-        createdAt: { $gte: cutoff },
+        createdAt: { $gte: rangeStart, $lte: rangeEnd },
       }).sort({ createdAt: -1 }),
-      computeTrendBuckets(studentId, range),
+      computeTrendBuckets(studentId, range, termWindow),
       User.findById(req.user.id).select("name"),
     ]);
 
@@ -1281,15 +1130,15 @@ export const getStudentReportPdf = async (req, res) => {
       emotionCheckins,
       trend,
       range,
+      termLabel,
       generatedBy: requester?.name || "",
     });
 
     const pdfBuffer = await renderPdfFromHtml(html);
 
-    const fileName = `${student.firstName}-${student.lastName}-${range}-report.pdf`.replace(
-      /\s+/g,
-      "_"
-    );
+    const fileName = `${student.fullName}-${
+      range === "term" ? termLabel : range
+    }-report.pdf`.replace(/\s+/g, "_");
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -1318,10 +1167,10 @@ export const updateStudentProfile = async (req, res) => {
   const {
     branch,
     admissionNumber,
-    firstName,
-    lastName,
+    fullName,
     dateOfBirth,
     gender,
+    programCategory,
     grade,
     section,
     diagnosis,
@@ -1375,24 +1224,24 @@ export const updateStudentProfile = async (req, res) => {
       student.admissionNumber = trimmed;
     }
 
-    if (firstName !== undefined) {
-      if (!firstName.trim()) {
+    if (fullName !== undefined) {
+      if (!fullName.trim()) {
         return res.status(400).json({
           success: false,
-          message: "First name is required",
+          message: "Full name is required",
         });
       }
-      student.firstName = firstName.trim();
+      student.fullName = fullName.trim();
     }
 
-    if (lastName !== undefined) {
-      if (!lastName.trim()) {
+    if (programCategory !== undefined) {
+      if (!["national", "cambridge"].includes(programCategory)) {
         return res.status(400).json({
           success: false,
-          message: "Last name is required",
+          message: "Invalid category",
         });
       }
-      student.lastName = lastName.trim();
+      student.programCategory = programCategory;
     }
 
     if (dateOfBirth !== undefined) {
@@ -1503,7 +1352,7 @@ export const updateStudentProfile = async (req, res) => {
     await student.save();
 
     const populated = await student.populate([
-      { path: "assignedTeacher", select: "name username" },
+      { path: "assignedTeacher", select: "name username email phone" },
       { path: "parentUser", select: "name username" },
       { path: "studentUser", select: "name username" },
     ]);
@@ -1578,13 +1427,34 @@ export const getAdminSymptomOptions = (req, res) => {
 // Body: { symptoms: string[], additionalNotes, medications?, medicationNotes? }
 export const adminCreateSymptomLog = async (req, res) => {
   const { studentId } = req.params;
-  const { symptoms, additionalNotes, medications, medicationNotes } = req.body;
+  const {
+    symptoms,
+    additionalNotes,
+    medications,
+    medicationNotes,
+    academicYear,
+    term,
+  } = req.body;
 
   try {
     if (!symptoms || symptoms.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Select at least one symptom",
+      });
+    }
+
+    if (!academicYear?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Select an academic year",
+      });
+    }
+
+    if (!TERMS.includes(term)) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a term",
       });
     }
 
@@ -1603,6 +1473,8 @@ export const adminCreateSymptomLog = async (req, res) => {
       additionalNotes,
       medications: (medications || []).filter((m) => m?.name?.trim()),
       medicationNotes,
+      academicYear: academicYear.trim(),
+      term,
     });
 
     // FR-10: re-check alert thresholds now that a new log exists.
@@ -1627,13 +1499,34 @@ export const adminCreateSymptomLog = async (req, res) => {
 // Body: { symptoms: string[], additionalNotes, medications?, medicationNotes? }
 export const adminUpdateSymptomLog = async (req, res) => {
   const { logId } = req.params;
-  const { symptoms, additionalNotes, medications, medicationNotes } = req.body;
+  const {
+    symptoms,
+    additionalNotes,
+    medications,
+    medicationNotes,
+    academicYear,
+    term,
+  } = req.body;
 
   try {
     if (!symptoms || symptoms.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Select at least one symptom",
+      });
+    }
+
+    if (!academicYear?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Select an academic year",
+      });
+    }
+
+    if (!TERMS.includes(term)) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a term",
       });
     }
 
@@ -1644,6 +1537,8 @@ export const adminUpdateSymptomLog = async (req, res) => {
         additionalNotes,
         medications: (medications || []).filter((m) => m?.name?.trim()),
         medicationNotes,
+        academicYear: academicYear.trim(),
+        term,
       },
       { new: true, runValidators: true }
     );
@@ -1702,13 +1597,27 @@ export const adminDeleteSymptomLog = async (req, res) => {
 // Body: { childEmoji, teacherEmoji }
 export const adminCreateEmotionCheckin = async (req, res) => {
   const { studentId } = req.params;
-  const { childEmoji, teacherEmoji } = req.body;
+  const { childEmoji, teacherEmoji, academicYear, term } = req.body;
 
   try {
     if (!childEmoji || !teacherEmoji) {
       return res.status(400).json({
         success: false,
         message: "childEmoji and teacherEmoji are both required",
+      });
+    }
+
+    if (!academicYear?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Select an academic year",
+      });
+    }
+
+    if (!TERMS.includes(term)) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a term",
       });
     }
 
@@ -1725,6 +1634,8 @@ export const adminCreateEmotionCheckin = async (req, res) => {
       teacher: req.user.id,
       childEmoji,
       teacherEmoji,
+      academicYear: academicYear.trim(),
+      term,
     });
 
     // FR-10: re-check alert thresholds now that a new check-in exists.
@@ -1749,13 +1660,27 @@ export const adminCreateEmotionCheckin = async (req, res) => {
 // Body: { childEmoji, teacherEmoji }
 export const adminUpdateEmotionCheckin = async (req, res) => {
   const { checkinId } = req.params;
-  const { childEmoji, teacherEmoji } = req.body;
+  const { childEmoji, teacherEmoji, academicYear, term } = req.body;
 
   try {
     if (!childEmoji || !teacherEmoji) {
       return res.status(400).json({
         success: false,
         message: "childEmoji and teacherEmoji are both required",
+      });
+    }
+
+    if (!academicYear?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Select an academic year",
+      });
+    }
+
+    if (!TERMS.includes(term)) {
+      return res.status(400).json({
+        success: false,
+        message: "Select a term",
       });
     }
 
@@ -1772,6 +1697,8 @@ export const adminUpdateEmotionCheckin = async (req, res) => {
     // hook recalculates compositeScore from the new emoji values.
     checkin.childEmoji = childEmoji;
     checkin.teacherEmoji = teacherEmoji;
+    checkin.academicYear = academicYear.trim();
+    checkin.term = term;
     await checkin.save();
 
     res.json({

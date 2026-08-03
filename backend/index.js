@@ -12,6 +12,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import studyModuleRoutes from "./routes/studyModuleRoutes.js";
 import doctorDocumentRoutes from "./routes/doctorDocumentRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
+import academicTermRoutes from "./routes/academicTermRoutes.js";
 import { closeBrowser } from "./utils/pdfGenerator.js";
 
 dotenv.config();
@@ -45,6 +46,7 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/study-modules", studyModuleRoutes);
 app.use("/api/doctor-documents", doctorDocumentRoutes);
 app.use("/api/notices", noticeRoutes);
+app.use("/api/academic-terms", academicTermRoutes);
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {

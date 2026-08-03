@@ -17,8 +17,7 @@ interface AlertItem {
   createdAt: string;
   student: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    fullName: string;
     grade?: string;
     section?: string;
     branch?: string;
@@ -182,7 +181,7 @@ export default function AdminAlertsPage() {
                           href={`/dashboard/admin/students/${alert.student._id}/history`}
                           className="text-blue-600 hover:underline"
                         >
-                          {alert.student.firstName} {alert.student.lastName}
+                          {alert.student.fullName}
                         </Link>
                         {alert.student.branch && (
                           <p className="text-xs text-gray-400">{alert.student.branch}</p>

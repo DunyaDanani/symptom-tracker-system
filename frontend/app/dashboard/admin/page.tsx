@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import MiniCalendar from "@/components/MiniCalendar";
+import AdmitStudentModal from "@/components/AdmitStudentModal";
 
 import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   branch?: string;
   assignedTeacher?: { name: string } | null;
@@ -27,38 +27,39 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [today] = useState(new Date());
+  const [showAdmitModal, setShowAdmitModal] = useState(false);
+
+  const loadDashboard = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const [studentsRes, statsRes] = await Promise.all([
+        fetch(`${API_BASE}/students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE}/staff/stats`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      const studentsData = await studentsRes.json();
+      if (studentsData.success) {
+        setStudents(studentsData.students.slice(0, 3));
+      }
+
+      const statsData = await statsRes.json();
+      if (statsData.success) {
+        setStats(statsData.stats);
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard data", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const load = async () => {
-      const token = localStorage.getItem("token");
-      try {
-        const [studentsRes, statsRes] = await Promise.all([
-          fetch(`${API_BASE}/students`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE}/staff/stats`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        const studentsData = await studentsRes.json();
-        if (studentsData.success) {
-          setStudents(studentsData.students.slice(0, 3));
-        }
-
-        const statsData = await statsRes.json();
-        if (statsData.success) {
-          setStats(statsData.stats);
-        }
-      } catch (err) {
-        console.error("Failed to load dashboard data", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
+    loadDashboard();
+  }, [loadDashboard]);
 
   const tiles = [
     {
@@ -94,14 +95,21 @@ export default function AdminDashboardPage() {
           >
             Manage Principals
           </Link>
-          <Link
-            href="/dashboard/admin/students/new"
+          <button
+            type="button"
+            onClick={() => setShowAdmitModal(true)}
             className="bg-orange-200 hover:bg-orange-300 transition-colors text-gray-800 text-sm font-medium px-5 py-2.5 rounded"
           >
             + Admit New Student
-          </Link>
+          </button>
         </div>
       </div>
+
+      <AdmitStudentModal
+        open={showAdmitModal}
+        onClose={() => setShowAdmitModal(false)}
+        onAdmitted={loadDashboard}
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -168,9 +176,7 @@ export default function AdminDashboardPage() {
               ) : (
                 students.map((s) => (
                   <tr key={s._id} className="border-b border-amber-100/60">
-                    <td className="px-4 py-3">
-                      {s.firstName} {s.lastName}
-                    </td>
+                    <td className="px-4 py-3">{s.fullName}</td>
                     <td className="px-4 py-3">{s.branch || "—"}</td>
                     <td className="px-4 py-3">{s.grade}</td>
                     <td className="px-4 py-3">

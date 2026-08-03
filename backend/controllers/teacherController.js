@@ -2,7 +2,8 @@ import Student from "../models/Student.js";
 import User from "../models/User.js";
 import TeacherProfile from "../models/TeacherProfile.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
-import EmotionCheckin from "../models/EmotionCheckin.js";
+import EmotionCheckin, { EMOJI_SCORES } from "../models/EmotionCheckin.js";
+import { resolveTermForDate } from "./academicTermController.js";
 import BreakActivityLog, {
   BREAK_ACTIVITY_OPTIONS,
 } from "../models/BreakActivityLog.js";
@@ -11,6 +12,7 @@ import {
   raiseManualFlagAlert,
   clearManualFlagAlert,
 } from "../utils/alertEngine.js";
+import { buildActivityPlan } from "../utils/activityPlanEngine.js";
 
 // Client meeting 20 Feb 2026: "Symptom tracker access should be extended
 // to all subject teachers, including Class Teachers and Subject
@@ -95,7 +97,7 @@ export const getSymptomOptions = (req, res) => {
 export const getMyStudents = async (req, res) => {
   try {
     const students = await Student.find(studentListFilter(req.user)).select(
-      "firstName lastName grade section diagnosis communicationLevel flagged flagNote admissionNumber dateOfBirth gender parentFirstName parentRelationship parentPhone parentEmail homeCity"
+      "fullName grade section diagnosis communicationLevel flagged flagNote admissionNumber dateOfBirth gender programCategory parentFirstName parentRelationship parentPhone parentEmail homeCity"
     );
 
     res.json({
@@ -165,15 +167,35 @@ export const getStudentToday = async (req, res) => {
 // Body: { studentId, symptoms: string[], additionalNotes, medications?, medicationNotes? }
 // medications: [{ name, dosage?, time? }] — client meeting 20 Feb 2026:
 // medication details must be recorded within the symptom tracker.
+// Academic Year/Term are no longer picked by the teacher on this form —
+// tapping through a Year/Term selector on every single symptom log was
+// exactly the kind of per-entry friction that drove down the Task
+// Completion Speed score in usability testing (3.09/5). Same auto-tagging
+// the child's one-tap emotion check-in already used: derive today's term
+// from the configured AcademicTerm calendar server-side instead.
 export const logSymptoms = async (req, res) => {
-  const { studentId, symptoms, additionalNotes, medications, medicationNotes } =
-    req.body;
+  const {
+    studentId,
+    symptoms,
+    additionalNotes,
+    medications,
+    medicationNotes,
+  } = req.body;
 
   try {
     if (!studentId || !symptoms || symptoms.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Select at least one symptom",
+      });
+    }
+
+    const matchingTerm = await resolveTermForDate(new Date());
+    if (!matchingTerm) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Today isn't covered by the school's academic calendar yet — ask an admin to configure it under Academic Terms before logging symptoms.",
       });
     }
 
@@ -196,6 +218,8 @@ export const logSymptoms = async (req, res) => {
       additionalNotes,
       medications: (medications || []).filter((m) => m?.name?.trim()),
       medicationNotes,
+      academicYear: matchingTerm.academicYear,
+      term: matchingTerm.term,
     });
 
     // FR-10: re-check alert thresholds now that a new log exists.
@@ -233,9 +257,9 @@ export const getSymptomHistory = async (req, res) => {
       });
     }
 
-    const logs = await SymptomLog.find({ student: studentId }).sort({
-      createdAt: -1,
-    });
+    const logs = await SymptomLog.find({ student: studentId })
+      .populate("teacher", "name role")
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
@@ -250,15 +274,193 @@ export const getSymptomHistory = async (req, res) => {
   }
 };
 
+// @route   PATCH /api/teacher/symptoms/:logId
+// @access  Shadow Teacher, Class Teacher
+// Body: { symptoms, additionalNotes, medications, medicationNotes }
+// A teacher can only correct their own logged entries — not ones logged by
+// another teacher or by admin — so a wrong mood emoji or a typo doesn't
+// require going through admin to fix.
+export const updateOwnSymptomLog = async (req, res) => {
+  const { logId } = req.params;
+  const { symptoms, additionalNotes, medications, medicationNotes } = req.body;
+
+  try {
+    if (!symptoms || symptoms.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Select at least one symptom",
+      });
+    }
+
+    const log = await SymptomLog.findById(logId);
+    if (!log) {
+      return res.status(404).json({
+        success: false,
+        message: "Symptom log not found",
+      });
+    }
+
+    if (log.teacher.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only edit symptom logs you recorded yourself",
+      });
+    }
+
+    log.symptoms = symptoms;
+    log.additionalNotes = additionalNotes;
+    log.medications = (medications || []).filter((m) => m?.name?.trim());
+    log.medicationNotes = medicationNotes;
+    await log.save();
+    await log.populate("teacher", "name role");
+
+    res.json({
+      success: true,
+      message: "Symptom log updated",
+      log,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   DELETE /api/teacher/symptoms/:logId
+// @access  Shadow Teacher, Class Teacher
+export const deleteOwnSymptomLog = async (req, res) => {
+  const { logId } = req.params;
+
+  try {
+    const log = await SymptomLog.findById(logId);
+    if (!log) {
+      return res.status(404).json({
+        success: false,
+        message: "Symptom log not found",
+      });
+    }
+
+    if (log.teacher.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only delete symptom logs you recorded yourself",
+      });
+    }
+
+    await log.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Symptom log deleted",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   POST /api/teacher/emotion-checkin/child
+// @access  Shadow Teacher, Class Teacher
+// Body: { studentId, childEmoji }
+// Step 1 of the in-person emotion check-in popup. There is no child login —
+// the shadow teacher hands their device to the child, the child taps their
+// own emoji, and that tap is recorded here. Step 2 is submitEmotionCheckin
+// below (the teacher's own independent observation), which is also the
+// step that generates the FR-09 activity plan, since that's the point at
+// which both sides of the check-in exist.
+//
+// Same "no specific time" behaviour as symptom logging: a fresh check-in
+// is always created here (never merged into an earlier same-day one), so
+// a shadow teacher can run this popup as many times a day as needed. The
+// returned checkin's _id is passed back into submitEmotionCheckin as
+// checkinId so step 2 links to *this* exact tap instead of guessing by day.
+export const submitChildEmojiCheckin = async (req, res) => {
+  const { studentId, childEmoji } = req.body;
+
+  try {
+    if (
+      !studentId ||
+      !childEmoji ||
+      !Object.keys(EMOJI_SCORES).includes(childEmoji)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "studentId and a valid childEmoji are required",
+      });
+    }
+
+    const student = await Student.findOne(
+      studentAccessFilter(req.user, studentId)
+    );
+
+    if (!student) {
+      return res.status(403).json({
+        success: false,
+        message: accessDeniedMessage(req.user),
+      });
+    }
+
+    // Left null if today's date doesn't fall inside any configured term —
+    // same "don't block the check-in over calendar gaps" behaviour used
+    // throughout the rest of this flow.
+    const matchingTerm = await resolveTermForDate(new Date());
+
+    const checkin = await EmotionCheckin.create({
+      student: studentId,
+      teacher: req.user.id,
+      childEmoji,
+      academicYear: matchingTerm?.academicYear,
+      term: matchingTerm?.term,
+    });
+
+    // FR-10: re-check alert thresholds now that the composite score may
+    // have changed.
+    await evaluateThresholds(studentId);
+
+    res.status(201).json({
+      success: true,
+      message: "Child's check-in recorded",
+      checkin,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   POST /api/teacher/emotion-checkin
 // @access  Shadow Teacher, Class Teacher
-// Body: { studentId, teacherEmoji }
-// The child submits their own emoji independently (see
-// studentController.submitChildEmotionCheckin). This just records the
-// teacher's side for today, filling in an existing same-day entry if the
-// child already checked in, or creating a new one otherwise.
+// Body: { studentId, teacherEmoji, checkinId? }
+// Step 2 of the popup: the teacher's own independent observation, recorded
+// right after the child's tap (submitChildEmojiCheckin above). When
+// checkinId is provided (the normal path — the popup passes back the id
+// returned by step 1), it's filled into that exact record so the two taps
+// pair up correctly. If it's missing (teacher checking in without a child
+// tap first), a fresh standalone record is created instead.
+//
+// No specific-time / once-a-day restriction here, same as symptom logging —
+// each popup run creates its own check-in rather than merging into
+// whatever happened earlier that day, so the shadow teacher can run this
+// as many times as needed.
+//
+// Academic Year/Term are auto-derived from today's date against the
+// AcademicTerm calendar, so the whole popup is emoji-tap-and-submit with no
+// picker anywhere in it.
+//
+// FR-09: because this is the step that completes the emoji pair, it also
+// builds and returns the personalised 3-activity plan (Aesthetic, Social,
+// Academic — see utils/activityPlanEngine.js) so the popup can show it
+// immediately as the final screen, without a separate fetch.
 export const submitEmotionCheckin = async (req, res) => {
-  const { studentId, teacherEmoji } = req.body;
+  const { studentId, teacherEmoji, checkinId } = req.body;
 
   try {
     if (!studentId || !teacherEmoji) {
@@ -279,25 +481,32 @@ export const submitEmotionCheckin = async (req, res) => {
       });
     }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+    // Left null if today's date doesn't fall inside any configured term —
+    // same "don't block the check-in over calendar gaps" behaviour as the
+    // child's tap.
+    const matchingTerm = await resolveTermForDate(new Date());
 
-    let checkin = await EmotionCheckin.findOne({
-      student: studentId,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    });
+    let checkin = checkinId
+      ? await EmotionCheckin.findOne({ _id: checkinId, student: studentId })
+      : null;
 
     if (checkin) {
       checkin.teacherEmoji = teacherEmoji;
       checkin.teacher = req.user.id;
+      // Fill in / refresh the term tag from today's date — harmless if the
+      // child's earlier tap already set the same value.
+      if (matchingTerm) {
+        checkin.academicYear = matchingTerm.academicYear;
+        checkin.term = matchingTerm.term;
+      }
       await checkin.save();
     } else {
       checkin = await EmotionCheckin.create({
         student: studentId,
         teacher: req.user.id,
         teacherEmoji,
+        academicYear: matchingTerm?.academicYear,
+        term: matchingTerm?.term,
       });
     }
 
@@ -305,10 +514,28 @@ export const submitEmotionCheckin = async (req, res) => {
     // have changed.
     await evaluateThresholds(studentId);
 
+    // FR-09: build the activity plan from the (now possibly complete)
+    // composite score plus whatever symptoms have been logged today.
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+    const symptomLogsToday = await SymptomLog.find({
+      student: studentId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    }).select("symptoms");
+    const symptomsToday = symptomLogsToday.flatMap((log) => log.symptoms);
+    const activityPlan = buildActivityPlan(
+      checkin.compositeScore,
+      symptomsToday,
+      student.diagnosis
+    );
+
     res.status(201).json({
       success: true,
       message: "Emotion check-in recorded",
       checkin,
+      activityPlan,
     });
   } catch (error) {
     console.error(error);
@@ -341,9 +568,133 @@ export const getEmotionHistory = async (req, res) => {
       createdAt: -1,
     });
 
+    // FR-09: alongside the raw history, also surface a suggested activity
+    // plan so the Emotion Tracker page can show "what to try next" without
+    // needing a brand new check-in just to see it — built from the most
+    // recent check-in's mood, today's logged symptoms, and the child's own
+    // diagnosis (see utils/activityPlanEngine.js), the same rules engine
+    // used right after a check-in is submitted.
+    const latestCheckin = checkins[0] || null;
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const symptomLogsToday = await SymptomLog.find({
+      student: studentId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    }).select("symptoms");
+    const symptomsToday = symptomLogsToday.flatMap((log) => log.symptoms);
+
+    const activityPlan = buildActivityPlan(
+      latestCheckin?.compositeScore,
+      symptomsToday,
+      student.diagnosis
+    );
+
     res.json({
       success: true,
       checkins,
+      activityPlan,
+      diagnosis: student.diagnosis,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   PATCH /api/teacher/emotion-checkin/:checkinId
+// @access  Shadow Teacher, Class Teacher
+// Body: { childEmoji, teacherEmoji }
+// Same "own entries only" rule as symptom logs — a teacher can fix a
+// mis-tap on a check-in they recorded, not ones recorded by someone else.
+export const updateOwnEmotionCheckin = async (req, res) => {
+  const { checkinId } = req.params;
+  const { childEmoji, teacherEmoji } = req.body;
+
+  try {
+    const checkin = await EmotionCheckin.findById(checkinId);
+    if (!checkin) {
+      return res.status(404).json({
+        success: false,
+        message: "Emotion check-in not found",
+      });
+    }
+
+    if (checkin.teacher.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only edit check-ins you recorded yourself",
+      });
+    }
+
+    if (childEmoji !== undefined) {
+      if (childEmoji && !Object.keys(EMOJI_SCORES).includes(childEmoji)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid childEmoji",
+        });
+      }
+      checkin.childEmoji = childEmoji || undefined;
+    }
+
+    if (teacherEmoji !== undefined) {
+      if (teacherEmoji && !Object.keys(EMOJI_SCORES).includes(teacherEmoji)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid teacherEmoji",
+        });
+      }
+      checkin.teacherEmoji = teacherEmoji || undefined;
+    }
+
+    await checkin.save();
+
+    res.json({
+      success: true,
+      message: "Emotion check-in updated",
+      checkin,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
+// @route   DELETE /api/teacher/emotion-checkin/:checkinId
+// @access  Shadow Teacher, Class Teacher
+export const deleteOwnEmotionCheckin = async (req, res) => {
+  const { checkinId } = req.params;
+
+  try {
+    const checkin = await EmotionCheckin.findById(checkinId);
+    if (!checkin) {
+      return res.status(404).json({
+        success: false,
+        message: "Emotion check-in not found",
+      });
+    }
+
+    if (checkin.teacher.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only delete check-ins you recorded yourself",
+      });
+    }
+
+    await checkin.deleteOne();
+
+    res.json({
+      success: true,
+      message: "Emotion check-in deleted",
     });
   } catch (error) {
     console.error(error);

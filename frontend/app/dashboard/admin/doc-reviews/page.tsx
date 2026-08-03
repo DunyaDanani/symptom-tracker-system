@@ -19,8 +19,7 @@ interface DoctorDoc {
   createdAt: string;
   student: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    fullName: string;
     grade?: string;
     section?: string;
     branch?: string;
@@ -165,9 +164,7 @@ export default function AdminDocReviewsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-800">
-                    {doc.student
-                      ? `${doc.student.firstName} ${doc.student.lastName}`
-                      : "Unknown student"}
+                    {doc.student ? doc.student.fullName : "Unknown student"}
                     {doc.student?.grade ? ` — ${doc.student.grade}` : ""}
                   </p>
                   {doc.student?.branch && (

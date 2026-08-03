@@ -88,6 +88,15 @@ const userSchema = new mongoose.Schema(
       },
     },
 
+    // Contact phone number. Mainly used for staff accounts (currently
+    // shadow teachers, so admins/principals/parents have a way to reach
+    // them directly) — optional and unset by default for other roles.
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+
     // Forgot-password flow: a hashed 6-digit code + its expiry, cleared
     // again once used.
     resetCode: {

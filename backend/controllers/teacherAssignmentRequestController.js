@@ -120,7 +120,7 @@ export const listTeacherAssignmentRequestsForPrincipal = async (req, res) => {
     const currentAssignments = await Student.find({
       assignedTeacher: { $in: teacherIds },
       status: "assigned",
-    }).select("firstName lastName assignedTeacher branch");
+    }).select("fullName assignedTeacher branch");
 
     const assignmentsByTeacher = {};
     currentAssignments.forEach((s) => {
@@ -128,7 +128,7 @@ export const listTeacherAssignmentRequestsForPrincipal = async (req, res) => {
       if (!assignmentsByTeacher[key]) assignmentsByTeacher[key] = [];
       assignmentsByTeacher[key].push({
         _id: s._id,
-        name: `${s.firstName} ${s.lastName}`,
+        name: s.fullName,
         branch: s.branch,
       });
     });

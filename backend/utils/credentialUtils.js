@@ -53,13 +53,6 @@ const ensureUniqueUsername = async (base, User, session) => {
   return username;
 };
 
-// Student: username = admission number, password = same.
-export const generateStudentCredentials = async (admissionNumber, User, session) => {
-  const base = (admissionNumber || "").trim();
-  const username = await ensureUniqueUsername(base, User, session);
-  return { username, password: username };
-};
-
 // Parent: username = first name + last 3 digits of the student's admission
 // number, password = same. Using the admission number (rather than phone
 // number) keeps the parent credential tied to the same student/admission

@@ -3,6 +3,7 @@ import {
   createPrincipal,
   getPrincipals,
   updatePrincipal,
+  deletePrincipal,
   getAlerts,
   getAlertUnreadCount,
   acknowledgeAlert,
@@ -20,6 +21,7 @@ router.get("/stats", getAdminStats);
 router.post("/principals", createPrincipal);
 router.get("/principals", getPrincipals);
 router.patch("/principals/:id", updatePrincipal);
+router.delete("/principals/:id", deletePrincipal);
 
 router.get("/alerts", getAlerts);
 router.get("/alerts/unread-count", getAlertUnreadCount);

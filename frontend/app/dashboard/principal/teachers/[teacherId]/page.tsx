@@ -18,8 +18,7 @@ interface TeacherProfileData {
 
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
 }
@@ -62,7 +61,9 @@ export default function PrincipalTeacherProfilePage({
   }, [teacherId]);
 
   return (
-    <PrincipalDashboardLayout>
+    <PrincipalDashboardLayout
+      breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
+    >
       <BackButton />
 
       {loading ? (
@@ -127,9 +128,7 @@ export default function PrincipalTeacherProfilePage({
                 <tbody>
                   {students.map((s) => (
                     <tr key={s._id} className="border-b border-gray-50">
-                      <td className="px-6 py-3">
-                        {s.firstName} {s.lastName}
-                      </td>
+                      <td className="px-6 py-3">{s.fullName}</td>
                       <td className="px-6 py-3">
                         {s.grade}
                         {s.section ? ` · ${s.section}` : ""}

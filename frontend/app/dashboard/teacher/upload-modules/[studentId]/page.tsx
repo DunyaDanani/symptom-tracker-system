@@ -4,13 +4,13 @@ import { use, useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import BackButton from "@/components/BackButton";
 import { SUBJECTS } from "@/lib/subjects";
+import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 import { API_BASE } from "@/lib/config";
 
 interface StudentSummary {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
 }
@@ -22,6 +22,8 @@ interface ResourceFile {
   createdAt: string;
   subject?: string;
   topic?: string;
+  academicYear?: string;
+  term?: string;
   isOwner?: boolean;
   uploadedByRole?: string;
 }
@@ -64,6 +66,8 @@ export default function TeacherUploadModulesWorkspacePage({
 }) {
   const { studentId } = use(params);
 
+  const { academicYears } = useAcademicTerms();
+
   const [tab, setTab] = useState<Tab>("modules");
 
   const [student, setStudent] = useState<StudentSummary | null>(null);
@@ -79,6 +83,8 @@ export default function TeacherUploadModulesWorkspacePage({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSubject, setEditSubject] = useState<string>(SUBJECTS[0]);
   const [editTopic, setEditTopic] = useState("");
+  const [editAcademicYear, setEditAcademicYear] = useState<string>("");
+  const [editTerm, setEditTerm] = useState<string>("");
   const [editFile, setEditFile] = useState<File | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
@@ -286,6 +292,8 @@ export default function TeacherUploadModulesWorkspacePage({
     setEditingId(f._id);
     setEditSubject(f.subject || SUBJECTS[0]);
     setEditTopic(f.topic || "");
+    setEditAcademicYear(f.academicYear || "");
+    setEditTerm((TERMS as readonly string[]).includes(f.term || "") ? (f.term as string) : TERMS[0]);
     setEditFile(null);
     setEditError("");
   };
@@ -307,7 +315,11 @@ export default function TeacherUploadModulesWorkspacePage({
     try {
       const formData = new FormData();
       formData.append("subject", editSubject);
-      if (isModule) formData.append("topic", editTopic.trim());
+      if (isModule) {
+        formData.append("topic", editTopic.trim());
+        formData.append("academicYear", editAcademicYear);
+        formData.append("term", editTerm);
+      }
       if (editFile) formData.append("file", editFile);
 
       const res = await fetch(`${API_BASE}/study-modules/${id}`, {
@@ -379,14 +391,20 @@ export default function TeacherUploadModulesWorkspacePage({
   };
 
   return (
-    <TeacherDashboardLayout>
+    <TeacherDashboardLayout
+      breadcrumbLabels={
+        student
+          ? { [studentId]: student.fullName }
+          : undefined
+      }
+    >
       <div className="flex items-center justify-between mt-2 mb-1">
         <h1 className="text-2xl font-semibold text-blue-900">Modules</h1>
         <BackButton />
       </div>
       {student && (
         <p className="text-sm text-gray-500 mb-6">
-          {student.firstName} {student.lastName} · {student.grade}
+          {student.fullName} · {student.grade}
           {student.section ? ` · ${student.section}` : ""}
         </p>
       )}
@@ -443,6 +461,13 @@ export default function TeacherUploadModulesWorkspacePage({
                       className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
                     />
                   </div>
+
+                  {academicYears.length === 0 && (
+                    <p className="text-xs text-amber-600 mb-4">
+                      No academic terms are configured yet — ask an admin to
+                      set up the calendar under Academic Terms.
+                    </p>
+                  )}
 
                   <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-rose-200 bg-rose-50/60 hover:bg-rose-50 transition-colors rounded-md py-10 cursor-pointer">
                     <input
@@ -584,6 +609,14 @@ export default function TeacherUploadModulesWorkspacePage({
                                                 )}
                                               </div>
 
+                                              {(f.academicYear || f.term) && (
+                                                <span className="inline-block text-xs text-gray-400 mt-1 ml-6">
+                                                  {[f.academicYear, f.term]
+                                                    .filter(Boolean)
+                                                    .join(" · ")}
+                                                </span>
+                                              )}
+
                                               {editingId === f._id && (
                                                 <EditFilePanel
                                                   isModule
@@ -591,6 +624,11 @@ export default function TeacherUploadModulesWorkspacePage({
                                                   setEditSubject={setEditSubject}
                                                   editTopic={editTopic}
                                                   setEditTopic={setEditTopic}
+                                                  editAcademicYear={editAcademicYear}
+                                                  setEditAcademicYear={setEditAcademicYear}
+                                                  editTerm={editTerm}
+                                                  setEditTerm={setEditTerm}
+                                                  academicYears={academicYears}
                                                   setEditFile={setEditFile}
                                                   editError={editError}
                                                   savingEdit={savingEdit}
@@ -992,6 +1030,11 @@ function EditFilePanel({
   setEditSubject,
   editTopic,
   setEditTopic,
+  editAcademicYear,
+  setEditAcademicYear,
+  editTerm,
+  setEditTerm,
+  academicYears,
   setEditFile,
   editError,
   savingEdit,
@@ -1003,6 +1046,11 @@ function EditFilePanel({
   setEditSubject: (v: string) => void;
   editTopic: string;
   setEditTopic: (v: string) => void;
+  editAcademicYear?: string;
+  setEditAcademicYear?: (v: string) => void;
+  editTerm?: string;
+  setEditTerm?: (v: string) => void;
+  academicYears?: string[];
   setEditFile: (f: File | null) => void;
   editError: string;
   savingEdit: boolean;
@@ -1033,6 +1081,34 @@ function EditFilePanel({
           />
         )}
       </div>
+
+      {isModule && setEditAcademicYear && setEditTerm && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select
+            value={editAcademicYear}
+            onChange={(e) => setEditAcademicYear(e.target.value)}
+            className="text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+          >
+            <option value="">Academic Year</option>
+            {(academicYears || []).map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <select
+            value={editTerm}
+            onChange={(e) => setEditTerm(e.target.value)}
+            className="text-xs border border-gray-200 rounded-md px-2 py-1.5 outline-none focus:border-blue-400"
+          >
+            {TERMS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <input
         type="file"

@@ -3,14 +3,14 @@
 import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
+import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
 
 interface StudentProfile {
   _id: string;
   admissionNumber?: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   diagnosis: string;
@@ -33,6 +33,23 @@ interface SymptomLogEntry {
   medications?: MedicationEntry[];
   medicationNotes?: string;
   createdAt: string;
+  teacher?: { name: string; role: string } | null;
+  academicYear?: string;
+  term?: string;
+}
+
+// A symptom log can be recorded by either a shadow teacher or an admin.
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  shadow_teacher: "Shadow Teacher",
+  cao: "CAO",
+  principal: "Principal",
+};
+
+function formatRecordedBy(teacher?: { name: string; role: string } | null) {
+  if (!teacher?.name) return "—";
+  const roleLabel = ROLE_LABELS[teacher.role] || teacher.role || "";
+  return roleLabel ? `${teacher.name} (${roleLabel})` : teacher.name;
 }
 
 interface EmotionCheckinEntry {
@@ -41,6 +58,8 @@ interface EmotionCheckinEntry {
   teacherEmoji?: string;
   compositeScore: number;
   createdAt: string;
+  academicYear?: string;
+  term?: string;
 }
 
 const EMOJI_ICON: Record<string, string> = {
@@ -64,9 +83,9 @@ export default function PrintReportPage({
 }) {
   const { studentId } = use(params);
 
-  const [range, setRange] = useState<"weekly" | "monthly" | "quarterly">(
-    "weekly"
-  );
+  const [range, setRange] = useState<
+    "weekly" | "monthly" | "quarterly" | "term"
+  >("weekly");
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [trend, setTrend] = useState<{ label: string; count: number }[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLogEntry[]>([]);
@@ -76,36 +95,67 @@ export default function PrintReportPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [generatedBy, setGeneratedBy] = useState("");
+  const [termAcademicYear, setTermAcademicYear] = useState("");
+  const [termTerm, setTermTerm] = useState("");
+
+  const { terms: academicTerms, academicYears, currentTerm } =
+    useAcademicTerms();
+
+  const selectedTermEntry = academicTerms.find(
+    (t) => t.academicYear === termAcademicYear && t.term === termTerm
+  );
 
   useEffect(() => {
     setGeneratedBy(localStorage.getItem("name") || "");
 
-    // Pick up an initial ?range= from the linking page (e.g. Reports),
-    // so the printout defaults to whatever range the user was viewing.
-    const initialRange = new URLSearchParams(window.location.search).get(
-      "range"
-    );
+    // Pick up an initial ?range= (and, for "term", ?academicYear=/?term=)
+    // from the linking page (e.g. Reports), so the printout defaults to
+    // whatever range the user was viewing.
+    const params = new URLSearchParams(window.location.search);
+    const initialRange = params.get("range");
     if (
       initialRange === "monthly" ||
       initialRange === "weekly" ||
-      initialRange === "quarterly"
+      initialRange === "quarterly" ||
+      initialRange === "term"
     ) {
       setRange(initialRange);
     }
+    const initialAcademicYear = params.get("academicYear");
+    const initialTerm = params.get("term");
+    if (initialAcademicYear) setTermAcademicYear(initialAcademicYear);
+    if (initialTerm) setTermTerm(initialTerm);
   }, []);
 
   useEffect(() => {
+    if (termAcademicYear || termTerm) return;
+    if (!currentTerm) return;
+    setTermAcademicYear(currentTerm.academicYear);
+    setTermTerm(currentTerm.term);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTerm]);
+
+  useEffect(() => {
+    if (range === "term" && (!termAcademicYear || !termTerm)) return;
+
     const load = async () => {
       setLoading(true);
       const token = localStorage.getItem("token");
       const headers = { Authorization: `Bearer ${token}` };
 
       try {
+        const trendQuery =
+          range === "term"
+            ? `range=term&academicYear=${encodeURIComponent(
+                termAcademicYear
+              )}&term=${encodeURIComponent(termTerm)}`
+            : `range=${range}`;
+
         const [profileRes, historyRes, trendRes] = await Promise.all([
           fetch(`${API_BASE}/students/${studentId}/profile`, { headers }),
           fetch(`${API_BASE}/students/${studentId}/history`, { headers }),
           fetch(
-            `${API_BASE}/students/${studentId}/symptom-trends?range=${range}`,
+            `${API_BASE}/students/${studentId}/symptom-trends?${trendQuery}`,
             { headers }
           ),
         ]);
@@ -121,18 +171,38 @@ export default function PrintReportPage({
         setStudent(profileData.student);
 
         if (historyData.success) {
-          const cutoff = new Date();
-          cutoff.setDate(cutoff.getDate() - RANGE_DAYS[range]);
+          let windowStart: Date;
+          let windowEnd: Date | null = null;
+
+          if (range === "term") {
+            if (!selectedTermEntry) {
+              setSymptomLogs([]);
+              setEmotionCheckins([]);
+              if (trendData.success) setTrend(trendData.trend);
+              return;
+            }
+            windowStart = new Date(selectedTermEntry.startDate);
+            windowEnd = new Date(selectedTermEntry.endDate);
+          } else {
+            windowStart = new Date();
+            windowStart.setDate(windowStart.getDate() - RANGE_DAYS[range]);
+          }
 
           setSymptomLogs(
-            historyData.symptomLogs.filter(
-              (l: SymptomLogEntry) => new Date(l.createdAt) >= cutoff
-            )
+            historyData.symptomLogs.filter((l: SymptomLogEntry) => {
+              const created = new Date(l.createdAt);
+              return (
+                created >= windowStart && (!windowEnd || created <= windowEnd)
+              );
+            })
           );
           setEmotionCheckins(
-            historyData.emotionCheckins.filter(
-              (c: EmotionCheckinEntry) => new Date(c.createdAt) >= cutoff
-            )
+            historyData.emotionCheckins.filter((c: EmotionCheckinEntry) => {
+              const created = new Date(c.createdAt);
+              return (
+                created >= windowStart && (!windowEnd || created <= windowEnd)
+              );
+            })
           );
         }
 
@@ -148,7 +218,7 @@ export default function PrintReportPage({
     };
 
     load();
-  }, [studentId, range]);
+  }, [studentId, range, termAcademicYear, termTerm, selectedTermEntry]);
 
   const generatedAt = new Date();
 
@@ -187,6 +257,44 @@ export default function PrintReportPage({
           >
             3-Month Final Conclusion
           </button>
+          <button
+            onClick={() => setRange("term")}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              range === "term"
+                ? "bg-sky-300 text-gray-900"
+                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
+            }`}
+          >
+            By Term
+          </button>
+          {range === "term" && (
+            <>
+              <select
+                value={termAcademicYear}
+                onChange={(e) => setTermAcademicYear(e.target.value)}
+                className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+              >
+                <option value="">Academic Year</option>
+                {academicYears.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={termTerm}
+                onChange={(e) => setTermTerm(e.target.value)}
+                className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+              >
+                <option value="">Term</option>
+                {TERMS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
         <button
           onClick={() => window.print()}
@@ -228,7 +336,13 @@ export default function PrintReportPage({
                 <p className="text-sm font-semibold text-gray-700">
                   {range === "quarterly"
                     ? "3-Month Final Conclusion Report"
-                    : "Symptom & Emotion Report"}
+                    : range === "term"
+                      ? `${
+                          termAcademicYear && termTerm
+                            ? `${termAcademicYear} ${termTerm}`
+                            : "Term"
+                        } Conclusion Report`
+                      : "Symptom & Emotion Report"}
                 </p>
                 <p className="text-xs text-gray-400">
                   Generated {generatedAt.toLocaleDateString()} by{" "}
@@ -241,7 +355,7 @@ export default function PrintReportPage({
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mb-6 break-inside-avoid">
               <InfoRow
                 label="Student Name"
-                value={`${student?.firstName} ${student?.lastName}`}
+                value={student?.fullName || ""}
               />
               <InfoRow
                 label="Admission No."
@@ -273,7 +387,11 @@ export default function PrintReportPage({
                     ? "Last 7 Days"
                     : range === "monthly"
                     ? "Last 5 Weeks (35 Days)"
-                    : "3-Month Final Conclusion (Last 92 Days)"
+                    : range === "quarterly"
+                    ? "3-Month Final Conclusion (Last 92 Days)"
+                    : termAcademicYear && termTerm
+                    ? `${termAcademicYear} ${termTerm}`
+                    : "—"
                 }
               />
             </div>
@@ -302,11 +420,17 @@ export default function PrintReportPage({
                       <th className="py-1.5 pr-3 font-semibold text-gray-600 whitespace-nowrap">
                         Date
                       </th>
+                      <th className="py-1.5 pr-3 font-semibold text-gray-600 whitespace-nowrap">
+                        Term
+                      </th>
                       <th className="py-1.5 pr-3 font-semibold text-gray-600">
                         Symptoms Observed
                       </th>
-                      <th className="py-1.5 font-semibold text-gray-600">
+                      <th className="py-1.5 pr-3 font-semibold text-gray-600">
                         Medication
+                      </th>
+                      <th className="py-1.5 font-semibold text-gray-600 whitespace-nowrap">
+                        Recorded By
                       </th>
                     </tr>
                   </thead>
@@ -316,6 +440,11 @@ export default function PrintReportPage({
                         <td className="py-2 pr-3 align-top whitespace-nowrap text-gray-600">
                           {new Date(log.createdAt).toLocaleDateString()}
                         </td>
+                        <td className="py-2 pr-3 align-top whitespace-nowrap text-gray-600">
+                          {log.academicYear && log.term
+                            ? `${log.academicYear} ${log.term}`
+                            : "—"}
+                        </td>
                         <td className="py-2 pr-3 align-top text-gray-800">
                           {log.symptoms.join("; ")}
                           {log.additionalNotes && (
@@ -324,7 +453,7 @@ export default function PrintReportPage({
                             </p>
                           )}
                         </td>
-                        <td className="py-2 align-top text-gray-800">
+                        <td className="py-2 pr-3 align-top text-gray-800">
                           {log.medications && log.medications.length > 0
                             ? log.medications
                                 .map(
@@ -338,6 +467,9 @@ export default function PrintReportPage({
                               {log.medicationNotes}
                             </p>
                           )}
+                        </td>
+                        <td className="py-2 align-top text-gray-600 whitespace-nowrap">
+                          {formatRecordedBy(log.teacher)}
                         </td>
                       </tr>
                     ))}
@@ -362,6 +494,9 @@ export default function PrintReportPage({
                       <th className="py-1.5 pr-3 font-semibold text-gray-600 whitespace-nowrap">
                         Date
                       </th>
+                      <th className="py-1.5 pr-3 font-semibold text-gray-600 whitespace-nowrap">
+                        Term
+                      </th>
                       <th className="py-1.5 pr-3 font-semibold text-gray-600">
                         Child
                       </th>
@@ -378,6 +513,11 @@ export default function PrintReportPage({
                       <tr key={c._id} className="border-b border-gray-100">
                         <td className="py-2 pr-3 whitespace-nowrap text-gray-600">
                           {new Date(c.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 pr-3 whitespace-nowrap text-gray-600">
+                          {c.academicYear && c.term
+                            ? `${c.academicYear} ${c.term}`
+                            : "—"}
                         </td>
                         <td className="py-2 pr-3 text-gray-800">
                           {c.childEmoji ? EMOJI_ICON[c.childEmoji] : "Not yet"}

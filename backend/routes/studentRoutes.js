@@ -4,12 +4,8 @@ import {
   getAllStudents,
   getAvailableTeachers,
   getBranches,
-  getMyProfile,
   getMyChild,
   getLinkedStudent,
-  getMyTodayEmotionCheckin,
-  submitChildEmotionCheckin,
-  getMyActivityPlan,
   getStudentHistory,
   getBreakActivities,
   getStudentProfile,
@@ -37,43 +33,17 @@ const router = express.Router();
 // wizard, principal account creation, etc).
 router.get("/branches", protect, getBranches);
 
-// Child fetching their own profile, parent fetching their child's profile,
-// and the symptom/emotion history view — must come BEFORE the admin-only
-// block below, otherwise they inherit the admin-only restriction.
-router.get("/me", protect, authorizeRoles("child"), getMyProfile);
+// Parent fetching their child's profile, and the symptom/emotion history
+// view — must come BEFORE the admin-only block below, otherwise they
+// inherit the admin-only restriction.
+// Note: there is no child login/dashboard — emotion check-ins are recorded
+// by the shadow teacher on the child's behalf (see teacherRoutes.js).
 router.get("/child", protect, authorizeRoles("parent"), getMyChild);
-router.get(
-  "/linked",
-  protect,
-  authorizeRoles("parent", "child"),
-  getLinkedStudent
-);
-router.get(
-  "/emotion-checkin/today",
-  protect,
-  authorizeRoles("child"),
-  getMyTodayEmotionCheckin
-);
-
-
-
-router.post(
-  "/emotion-checkin",
-  protect,
-  authorizeRoles("child"),
-  submitChildEmotionCheckin
-);
-// FR-09/FR-12: today's personalised activity plan for the child dashboard.
-router.get(
-  "/activity-plan",
-  protect,
-  authorizeRoles("child"),
-  getMyActivityPlan
-);
+router.get("/linked", protect, authorizeRoles("parent"), getLinkedStudent);
 router.get(
   "/:studentId/history",
   protect,
-  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
   getStudentHistory
 );
 router.get(
@@ -85,14 +55,13 @@ router.get(
 router.get(
   "/:studentId/profile",
   protect,
-  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
   getStudentProfile
 );
 router.get(
   "/:studentId/symptom-trends",
   protect,
   authorizeRoles(
-    "child",
     "parent",
     "shadow_teacher",
     "class_teacher",
@@ -106,7 +75,7 @@ router.get(
 router.get(
   "/:studentId/report.pdf",
   protect,
-  authorizeRoles("admin", "principal", "parent", "shadow_teacher", "child"),
+  authorizeRoles("admin", "principal", "parent", "shadow_teacher"),
   getStudentReportPdf
 );
 

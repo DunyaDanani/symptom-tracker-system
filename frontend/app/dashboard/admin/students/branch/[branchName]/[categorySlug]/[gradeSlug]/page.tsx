@@ -10,8 +10,7 @@ import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
   admissionNumber?: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   branch: string;
@@ -74,7 +73,7 @@ export default function AdminBranchGradePage({
       <BackButton />
 
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
-        {grade.label} — {branch}
+        {branch} - {grade.label}
       </h1>
       <p className="text-sm text-gray-500 mb-8">
         {students.length} student{students.length === 1 ? "" : "s"}
@@ -119,9 +118,7 @@ export default function AdminBranchGradePage({
                   <td className="px-6 py-3 text-gray-500">
                     {s.admissionNumber || "—"}
                   </td>
-                  <td className="px-6 py-3">
-                    {s.firstName} {s.lastName}
-                  </td>
+                  <td className="px-6 py-3">{s.fullName}</td>
                   <td className="px-6 py-3">{s.section || "—"}</td>
                   <td className="px-6 py-3">
                     {s.assignedTeacher?.name || "Unassigned"}

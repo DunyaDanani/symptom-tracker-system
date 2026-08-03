@@ -11,15 +11,18 @@ type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   communicationLevel: string;
   diagnosis: string;
   flagged?: boolean;
   examEligibility?: EligibilityStatus;
-  assignedTeacher?: { name: string } | null;
+  assignedTeacher?: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
   parentUser?: { name: string } | null;
 }
 
@@ -78,7 +81,13 @@ export default function PrincipalStudentProfilePage({
   }, [studentId]);
 
   return (
-    <PrincipalDashboardLayout>
+    <PrincipalDashboardLayout
+      breadcrumbLabels={
+        student
+          ? { [studentId]: student.fullName }
+          : undefined
+      }
+    >
       <BackButton />
 
       {loading ? (
@@ -89,13 +98,13 @@ export default function PrincipalStudentProfilePage({
         <>
           <div className="flex items-center gap-4 mt-2 mb-6">
             <Avatar
-              name={`${student.firstName} ${student.lastName}`}
+              name={student.fullName}
               size="lg"
             />
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-semibold text-blue-900">
-                  {student.firstName} {student.lastName}
+                  {student.fullName}
                 </h1>
                 {student.flagged && (
                   <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
@@ -137,6 +146,38 @@ export default function PrincipalStudentProfilePage({
                   value={student.parentUser?.name || "—"}
                 />
               </dl>
+
+              {student.assignedTeacher && (
+                <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+                  <span className="text-xs font-semibold text-gray-400 tracking-wide">
+                    Contact Shadow Teacher:
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {student.assignedTeacher.phone && (
+                      <a
+                        href={`tel:${student.assignedTeacher.phone}`}
+                        className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
+                      >
+                        📞 {student.assignedTeacher.phone}
+                      </a>
+                    )}
+                    {student.assignedTeacher.email && (
+                      <a
+                        href={`mailto:${student.assignedTeacher.email}`}
+                        className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
+                      >
+                        ✉️ {student.assignedTeacher.email}
+                      </a>
+                    )}
+                    {!student.assignedTeacher.phone &&
+                      !student.assignedTeacher.email && (
+                        <span className="text-xs text-gray-400">
+                          No contact details on file
+                        </span>
+                      )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="lg:col-span-1 flex flex-col gap-4">

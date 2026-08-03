@@ -14,8 +14,7 @@ interface Stats {
 
 interface AttentionStudent {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   assignedTeacher?: { name: string } | null;
@@ -151,7 +150,7 @@ export default function PrincipalDashboardPage() {
                           <UsersIcon className="w-4 h-4" />
                         </span>
                         <span className="text-sm font-medium text-gray-800">
-                          {s.firstName} {s.lastName}
+                          {s.fullName}
                         </span>
                       </span>
                       <ChevronIcon

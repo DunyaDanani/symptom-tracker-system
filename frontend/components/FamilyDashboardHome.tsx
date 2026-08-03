@@ -11,8 +11,7 @@ type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 interface LinkedStudent {
   _id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   diagnosis: string;
@@ -73,24 +72,6 @@ export default function FamilyDashboardHome({
     role === "parent"
       ? [
           {
-            label: "Emotion Tracker",
-            icon: EmotionIcon,
-            color: "bg-pink-50 text-pink-600",
-            href: `${basePath}/emotion-history`,
-          },
-          {
-            label: "Symptom Tracking",
-            icon: SymptomIcon,
-            color: "bg-orange-50 text-orange-600",
-            href: `${basePath}/symptom-history`,
-          },
-          {
-            label: "Break Time",
-            icon: BreakTimeIcon,
-            color: "bg-amber-50 text-amber-600",
-            href: `${basePath}/break-activities`,
-          },
-          {
             label: "Study Module",
             icon: StudyIcon,
             color: "bg-blue-50 text-blue-600",
@@ -133,7 +114,7 @@ export default function FamilyDashboardHome({
     return (
       <>
         <h1 className="text-3xl font-bold text-blue-900 mb-1">
-          Hi {student?.firstName || "there"}! 👋
+          Hi {student?.fullName?.split(" ")[0] || "there"}! 👋
         </h1>
         <p className="text-sm text-gray-500 mb-8">
           Pick something fun to do today ✨
@@ -172,7 +153,7 @@ export default function FamilyDashboardHome({
                 <Row label="Admission Number" value={student.admissionNumber} />
                 <Row
                   label="Name"
-                  value={`${student.firstName} ${student.lastName}`}
+                  value={student.fullName}
                 />
                 <Row label="Grade" value={student.grade} />
                 {student.section && (
@@ -232,10 +213,7 @@ export default function FamilyDashboardHome({
           ) : student ? (
             <dl className="space-y-3 text-sm">
               <Row label="Admission Number" value={student.admissionNumber} />
-              <Row
-                label="Name"
-                value={`${student.firstName} ${student.lastName}`}
-              />
+              <Row label="Name" value={student.fullName} />
               <Row label="Grade" value={student.grade} />
               {student.section && <Row label="Section" value={student.section} />}
               <Row label="Diagnosis" value={student.diagnosis} />

@@ -23,7 +23,7 @@ import {
 const buildAttentionList = async (branch) => {
   const students = await Student.find({ branch }).populate(
     "assignedTeacher",
-    "name username"
+    "name username email phone"
   );
 
   const now = new Date();
@@ -72,8 +72,7 @@ const buildAttentionList = async (branch) => {
 
       return {
         _id: student._id,
-        firstName: student.firstName,
-        lastName: student.lastName,
+        fullName: student.fullName,
         grade: student.grade,
         section: student.section,
         assignedTeacher: student.assignedTeacher,
@@ -144,7 +143,7 @@ export const getAttention = async (req, res) => {
 export const getRoster = async (req, res) => {
   try {
     const students = await Student.find({ branch: req.user.branch })
-      .populate("assignedTeacher", "name username")
+      .populate("assignedTeacher", "name username email phone")
       .populate("parentUser", "name username")
       .populate("studentUser", "name username")
       .sort({ createdAt: -1 });
@@ -254,7 +253,7 @@ export const getTeacherProfile = async (req, res) => {
     const students = await Student.find({
       branch: req.user.branch,
       assignedTeacher: teacherId,
-    }).select("firstName lastName grade section");
+    }).select("fullName grade section");
 
     res.json({
       success: true,

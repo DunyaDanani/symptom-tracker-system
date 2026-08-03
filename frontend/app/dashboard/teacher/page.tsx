@@ -15,8 +15,7 @@ interface TeacherProfile {
 
 interface AssignedStudent {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   flagged?: boolean;
@@ -163,7 +162,7 @@ export default function TeacherDashboardPage() {
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-gray-800">
-                    {s.firstName} {s.lastName}
+                    {s.fullName}
                   </span>
                   <span className="text-xs text-gray-400">
                     {s.grade}

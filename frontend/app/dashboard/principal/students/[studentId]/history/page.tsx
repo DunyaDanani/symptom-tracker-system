@@ -10,6 +10,23 @@ interface SymptomLogEntry {
   symptoms: string[];
   additionalNotes?: string;
   createdAt: string;
+  teacher?: { name: string; role: string } | null;
+  academicYear?: string;
+  term?: string;
+}
+
+// A symptom log can be recorded by either a shadow teacher or an admin.
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  shadow_teacher: "Shadow Teacher",
+  cao: "CAO",
+  principal: "Principal",
+};
+
+function formatRecordedBy(teacher?: { name: string; role: string } | null) {
+  if (!teacher?.name) return "—";
+  const roleLabel = ROLE_LABELS[teacher.role] || teacher.role || "";
+  return roleLabel ? `${teacher.name} (${roleLabel})` : teacher.name;
 }
 
 interface EmotionCheckinEntry {
@@ -18,6 +35,8 @@ interface EmotionCheckinEntry {
   teacherEmoji?: string;
   compositeScore: number;
   createdAt: string;
+  academicYear?: string;
+  term?: string;
 }
 
 const EMOJI_ICON: Record<string, string> = {
@@ -95,12 +114,15 @@ export default function PrincipalStudentHistoryPage({
                   <th className="px-4 py-3 font-semibold text-gray-700">
                     Symptoms
                   </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    Recorded By
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {symptomLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={2} className="px-4 py-4 text-gray-400">
+                    <td colSpan={3} className="px-4 py-4 text-gray-400">
                       No symptom logs yet.
                     </td>
                   </tr>
@@ -109,6 +131,11 @@ export default function PrincipalStudentHistoryPage({
                     <tr key={log._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(log.createdAt).toLocaleString()}
+                        {log.academicYear && log.term && (
+                          <p className="text-xs text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 mt-1 inline-block">
+                            {log.academicYear} {log.term}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-800">
                         {log.symptoms.join(", ")}
@@ -117,6 +144,9 @@ export default function PrincipalStudentHistoryPage({
                             {log.additionalNotes}
                           </p>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {formatRecordedBy(log.teacher)}
                       </td>
                     </tr>
                   ))
@@ -158,6 +188,11 @@ export default function PrincipalStudentHistoryPage({
                     <tr key={c._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(c.createdAt).toLocaleString()}
+                        {c.academicYear && c.term && (
+                          <p className="text-xs text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 mt-1 inline-block">
+                            {c.academicYear} {c.term}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-lg">
                         {c.childEmoji ? (

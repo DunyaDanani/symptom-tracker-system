@@ -46,6 +46,8 @@ const RANGE_LABEL = {
   weekly: "Last 7 Days",
   monthly: "Last 5 Weeks (35 Days)",
   quarterly: "3-Month Final Conclusion (Last 92 Days)",
+  // "term" has no fixed label — it's filled in from the specific
+  // Academic Year + Term the caller requested (see buildReportHtml).
 };
 
 function escapeHtml(value) {
@@ -60,6 +62,27 @@ function escapeHtml(value) {
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString();
+}
+
+// Symptom logs can be recorded by either a shadow teacher or an admin —
+// this labels which, for the "Recorded By" column below.
+const ROLE_LABELS = {
+  admin: "Admin",
+  shadow_teacher: "Shadow Teacher",
+  cao: "CAO",
+  principal: "Principal",
+};
+
+function formatRecordedBy(teacher) {
+  if (!teacher || !teacher.name) return "—";
+  const roleLabel = ROLE_LABELS[teacher.role] || teacher.role || "";
+  return roleLabel ? `${teacher.name} (${roleLabel})` : teacher.name;
+}
+
+function formatTerm(entry) {
+  return entry.academicYear && entry.term
+    ? `${entry.academicYear} ${entry.term}`
+    : "—";
 }
 
 // Small dependency-free inline SVG line chart, standing in for the
@@ -141,6 +164,7 @@ function renderSymptomLogsTable(symptomLogs) {
       return `
         <tr>
           <td class="nowrap">${formatDate(log.createdAt)}</td>
+          <td class="nowrap">${escapeHtml(formatTerm(log))}</td>
           <td>
             ${escapeHtml(log.symptoms.join("; "))}
             ${log.additionalNotes ? `<div class="muted small">Note: ${escapeHtml(log.additionalNotes)}</div>` : ""}
@@ -149,6 +173,7 @@ function renderSymptomLogsTable(symptomLogs) {
             ${meds}
             ${log.medicationNotes ? `<div class="muted small">${escapeHtml(log.medicationNotes)}</div>` : ""}
           </td>
+          <td class="nowrap">${escapeHtml(formatRecordedBy(log.teacher))}</td>
         </tr>
       `;
     })
@@ -159,8 +184,10 @@ function renderSymptomLogsTable(symptomLogs) {
       <thead>
         <tr>
           <th class="nowrap">Date</th>
+          <th class="nowrap">Term</th>
           <th>Symptoms Observed</th>
           <th>Medication</th>
+          <th class="nowrap">Recorded By</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -177,6 +204,7 @@ function renderEmotionTable(emotionCheckins) {
       (c) => `
         <tr>
           <td class="nowrap">${formatDate(c.createdAt)}</td>
+          <td class="nowrap">${escapeHtml(formatTerm(c))}</td>
           <td>${c.childEmoji ? escapeHtml(EMOJI_ICON[c.childEmoji] || c.childEmoji) : "Not yet"}</td>
           <td>${c.teacherEmoji ? escapeHtml(EMOJI_ICON[c.teacherEmoji] || c.teacherEmoji) : "Not yet"}</td>
           <td>${c.compositeScore} / 5</td>
@@ -190,6 +218,7 @@ function renderEmotionTable(emotionCheckins) {
       <thead>
         <tr>
           <th class="nowrap">Date</th>
+          <th class="nowrap">Term</th>
           <th>Child</th>
           <th>Teacher</th>
           <th>Score</th>
@@ -206,7 +235,8 @@ function renderEmotionTable(emotionCheckins) {
  * @param {Array} params.symptomLogs
  * @param {Array} params.emotionCheckins
  * @param {Array} params.trend - [{ label, count }]
- * @param {"weekly"|"monthly"|"quarterly"} params.range
+ * @param {"weekly"|"monthly"|"quarterly"|"term"} params.range
+ * @param {string} [params.termLabel] - e.g. "2026 Term 1", only set when range === "term"
  * @param {string} params.generatedBy - display name of the user who requested the report
  */
 export function buildReportHtml({
@@ -215,15 +245,18 @@ export function buildReportHtml({
   emotionCheckins,
   trend,
   range,
+  termLabel,
   generatedBy,
 }) {
   const generatedAt = new Date().toLocaleDateString();
   const reportTitle =
     range === "quarterly"
       ? "3-Month Final Conclusion Report"
-      : "Symptom & Emotion Report";
+      : range === "term"
+        ? `${termLabel || "Term"} Conclusion Report`
+        : "Symptom & Emotion Report";
 
-  const studentName = `${student.firstName} ${student.lastName}`;
+  const studentName = student.fullName;
   const admissionNumber = student.admissionNumber || "—";
   const gradeSection = `${student.grade}${student.section ? ` · ${student.section}` : ""}`;
   const teacherName = student.assignedTeacher?.name || "Unassigned";
@@ -334,7 +367,7 @@ export function buildReportHtml({
     <div class="info-row"><span class="label">Communication Level:</span> <span class="value">${escapeHtml(student.communicationLevel || "—")}</span></div>
     <div class="info-row"><span class="label">Shadow Teacher:</span> <span class="value">${escapeHtml(teacherName)}</span></div>
     <div class="info-row"><span class="label">Parent / Guardian:</span> <span class="value">${escapeHtml(parentName)}</span></div>
-    <div class="info-row"><span class="label">Report Period:</span> <span class="value">${escapeHtml(RANGE_LABEL[range] || RANGE_LABEL.weekly)}</span></div>
+    <div class="info-row"><span class="label">Report Period:</span> <span class="value">${escapeHtml(range === "term" ? termLabel || "—" : RANGE_LABEL[range] || RANGE_LABEL.weekly)}</span></div>
   </div>
 
   <section>

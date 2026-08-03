@@ -11,16 +11,17 @@ interface TeacherProfileData {
   name: string;
   username: string;
   email?: string | null;
+  phone?: string | null;
   qualification: string;
   specialization: string;
   experienceYears: number;
   age: number | null;
+  nic?: string;
 }
 
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   branch: string;
@@ -43,10 +44,12 @@ export default function AdminTeacherProfilePage({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editAge, setEditAge] = useState("");
   const [editQualification, setEditQualification] = useState("");
   const [editSpecialization, setEditSpecialization] = useState("");
   const [editExperienceYears, setEditExperienceYears] = useState("");
+  const [editNic, setEditNic] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -74,12 +77,14 @@ export default function AdminTeacherProfilePage({
             setTeacher(found);
             setEditName(found.name);
             setEditEmail(found.email || "");
+            setEditPhone(found.phone || "");
             setEditAge(found.age ? String(found.age) : "");
             setEditQualification(found.qualification || "");
             setEditSpecialization(found.specialization || "");
             setEditExperienceYears(
               found.experienceYears ? String(found.experienceYears) : ""
             );
+            setEditNic(found.nic || "");
           } else setError("Teacher not found");
         } else {
           setError(teachersData.message || "Could not load teacher");
@@ -118,10 +123,12 @@ export default function AdminTeacherProfilePage({
         body: JSON.stringify({
           name: editName,
           email: editEmail.trim(),
+          phone: editPhone.trim(),
           age: editAge,
           qualification: editQualification,
           specialization: editSpecialization,
           experienceYears: editExperienceYears,
+          nic: editNic.trim(),
         }),
       });
       const data = await res.json();
@@ -141,7 +148,9 @@ export default function AdminTeacherProfilePage({
   };
 
   return (
-    <DashboardLayout>
+    <DashboardLayout
+      breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
+    >
       <BackButton />
 
       {loading ? (
@@ -194,6 +203,23 @@ export default function AdminTeacherProfilePage({
                       placeholder="teacher@example.com"
                     />
                   </EditField>
+                  <EditField label="Phone Number">
+                    <input
+                      type="tel"
+                      className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      placeholder="e.g. 0771234567"
+                    />
+                  </EditField>
+                  <EditField label="NIC">
+                    <input
+                      className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+                      value={editNic}
+                      onChange={(e) => setEditNic(e.target.value)}
+                      placeholder="e.g. 199012345678 or 901234567V"
+                    />
+                  </EditField>
                   <EditField label="Age">
                     <input
                       type="text"
@@ -243,6 +269,7 @@ export default function AdminTeacherProfilePage({
                       setSaveError("");
                       setEditName(teacher.name);
                       setEditEmail(teacher.email || "");
+                      setEditPhone(teacher.phone || "");
                       setEditAge(teacher.age ? String(teacher.age) : "");
                       setEditQualification(teacher.qualification || "");
                       setEditSpecialization(teacher.specialization || "");
@@ -251,6 +278,7 @@ export default function AdminTeacherProfilePage({
                           ? String(teacher.experienceYears)
                           : ""
                       );
+                      setEditNic(teacher.nic || "");
                     }}
                     className="text-sm text-gray-500 hover:underline"
                   >
@@ -262,6 +290,8 @@ export default function AdminTeacherProfilePage({
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <ProfileRow label="Username" value={teacher.username} />
                 <ProfileRow label="Email" value={teacher.email || "—"} />
+                <ProfileRow label="Phone" value={teacher.phone || "—"} />
+                <ProfileRow label="NIC" value={teacher.nic || "—"} />
                 <ProfileRow
                   label="Age"
                   value={teacher.age ? String(teacher.age) : "—"}
@@ -308,9 +338,7 @@ export default function AdminTeacherProfilePage({
                 <tbody>
                   {students.map((s) => (
                     <tr key={s._id} className="border-b border-gray-50">
-                      <td className="px-6 py-3">
-                        {s.firstName} {s.lastName}
-                      </td>
+                      <td className="px-6 py-3">{s.fullName}</td>
                       <td className="px-6 py-3">
                         {s.grade}
                         {s.section ? ` · ${s.section}` : ""}

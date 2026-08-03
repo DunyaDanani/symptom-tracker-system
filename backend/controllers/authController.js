@@ -16,7 +16,7 @@ const resolveRecoveryEmail = async (user) => {
     if (!student) return null;
     return {
       email: student.parentEmail,
-      label: `${student.firstName} ${student.lastName} (via parent)`,
+      label: `${student.fullName} (via parent)`,
     };
   }
   if (user.role === "parent") {
@@ -255,12 +255,12 @@ export const forgotUsername = async (req, res) => {
     if (staffUser) lines.push(`Your username: <strong>${staffUser.username}</strong>`);
     if (student?.parentUser) {
       lines.push(
-        `Parent username (for ${student.firstName} ${student.lastName}): <strong>${student.parentUser.username}</strong>`
+        `Parent username (for ${student.fullName}): <strong>${student.parentUser.username}</strong>`
       );
     }
     if (student?.studentUser) {
       lines.push(
-        `${student.firstName}'s student username: <strong>${student.studentUser.username}</strong>`
+        `${student.fullName}'s student username: <strong>${student.studentUser.username}</strong>`
       );
     }
 

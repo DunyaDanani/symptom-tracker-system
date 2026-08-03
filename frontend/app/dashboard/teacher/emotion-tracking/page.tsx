@@ -8,8 +8,7 @@ import { API_BASE } from "@/lib/config";
 
 interface AssignedStudent {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   diagnosis: string;
@@ -72,7 +71,7 @@ export default function TeacherEmotionTrackingListPage() {
               className="bg-white rounded-md shadow-sm p-5 hover:shadow-md transition-shadow"
             >
               <p className="font-semibold text-gray-800">
-                {s.firstName} {s.lastName}
+                {s.fullName}
               </p>
               <p className="text-sm text-gray-500 mt-1">
                 {s.grade}

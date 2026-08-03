@@ -70,10 +70,10 @@ export default function LoginPage() {
           router.push('/dashboard/parent');
           break;
 
-        case 'child':
-          router.push('/dashboard/child');
-          break;
-
+        // Note: there is no child login/dashboard anymore — emotion
+        // check-ins are recorded by the shadow teacher on the child's
+        // behalf. A legacy 'child' account (if one still exists in the
+        // database from before this change) falls through to default.
         default:
           router.push('/dashboard');
       }

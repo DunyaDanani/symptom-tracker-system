@@ -1,6 +1,7 @@
 import fs from "fs";
 import Student from "../models/Student.js";
-import StudyResource, { SUBJECTS } from "../models/StudyResource.js";
+import StudyResource, { SUBJECTS, TERMS } from "../models/StudyResource.js";
+import { resolveTermForDate } from "./academicTermController.js";
 
 // Shared ownership check — makes sure the requesting user is actually
 // allowed to touch this student's study resources.
@@ -128,7 +129,7 @@ export const getResources = async (req, res) => {
 // for "module" and "submission" — a submission always targets the topic
 // it's answering), file
 export const uploadResource = async (req, res) => {
-  const { studentId, type, subject, topic } = req.body;
+  const { studentId, type, subject, topic, academicYear, term } = req.body;
 
   try {
     if (!req.file) {
@@ -176,6 +177,30 @@ export const uploadResource = async (req, res) => {
       });
     }
 
+    // Modules are tagged with the academic year/term they were assigned
+    // for, so they can be found later — past papers and submissions don't
+    // need this. The upload form no longer makes the teacher pick a
+    // Year/Term every time they add a file: if neither was passed in, it's
+    // auto-derived from today's date against the AcademicTerm calendar
+    // (same helper the emotion check-in and symptom log auto-tagging use).
+    // An explicit academicYear/term in the body still wins — used when
+    // backfilling a module for an earlier term via the edit panel.
+    let resolvedAcademicYear = academicYear?.trim() || "";
+    let resolvedTerm = TERMS.includes(term) ? term : "";
+
+    if (type === "module" && (!resolvedAcademicYear || !resolvedTerm)) {
+      const matchingTerm = await resolveTermForDate(new Date());
+      if (!matchingTerm) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Today isn't covered by the school's academic calendar yet — ask an admin to configure it under Academic Terms before uploading modules.",
+        });
+      }
+      resolvedAcademicYear = matchingTerm.academicYear;
+      resolvedTerm = matchingTerm.term;
+    }
+
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({
@@ -196,6 +221,8 @@ export const uploadResource = async (req, res) => {
       type,
       subject,
       topic: type === "module" || type === "submission" ? topic.trim() : undefined,
+      academicYear: type === "module" ? resolvedAcademicYear : undefined,
+      term: type === "module" ? resolvedTerm : undefined,
       fileName: req.file.originalname,
       filePath: req.file.path,
       uploadedBy: req.user.id,
@@ -267,7 +294,7 @@ export const downloadResource = async (req, res) => {
 // disk. The resource's "type" itself can't be changed.
 export const editResource = async (req, res) => {
   const { id } = req.params;
-  const { subject, topic } = req.body;
+  const { subject, topic, academicYear, term } = req.body;
 
   try {
     const resource = await StudyResource.findById(id);
@@ -304,6 +331,28 @@ export const editResource = async (req, res) => {
         });
       }
       resource.topic = needsTopic ? topic.trim() : undefined;
+    }
+
+    if (resource.type === "module") {
+      if (academicYear !== undefined) {
+        if (!academicYear.trim()) {
+          return res.status(400).json({
+            success: false,
+            message: "An academic year is required for this file",
+          });
+        }
+        resource.academicYear = academicYear.trim();
+      }
+
+      if (term !== undefined) {
+        if (!TERMS.includes(term)) {
+          return res.status(400).json({
+            success: false,
+            message: "A valid term is required for this file",
+          });
+        }
+        resource.term = term;
+      }
     }
 
     if (req.file) {

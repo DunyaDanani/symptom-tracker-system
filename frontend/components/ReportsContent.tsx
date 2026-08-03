@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
 import BackButton from "@/components/BackButton";
+import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
 
 // Same day-count windows the printable report uses, so the on-screen
 // Medication Log matches whatever "Symptom Trends" is currently showing.
+// "term" isn't here because its window comes from the selected
+// AcademicTerm's actual start/end dates, not a fixed day count.
 const RANGE_DAYS: Record<"weekly" | "monthly" | "quarterly", number> = {
   weekly: 7,
   monthly: 35,
@@ -33,13 +36,31 @@ interface SymptomLogEntry {
 // /api/students/linked endpoint so it works for either role's token.
 export default function ReportsContent() {
   const [studentId, setStudentId] = useState<string | null>(null);
-  const [range, setRange] = useState<"weekly" | "monthly" | "quarterly">(
+  const [range, setRange] = useState<"weekly" | "monthly" | "quarterly" | "term">(
     "weekly"
   );
   const [trend, setTrend] = useState<{ label: string; count: number }[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [termAcademicYear, setTermAcademicYear] = useState("");
+  const [termTerm, setTermTerm] = useState("");
+
+  const { terms: academicTerms, academicYears, currentTerm } =
+    useAcademicTerms();
+
+  useEffect(() => {
+    if (!currentTerm) return;
+    setTermAcademicYear((prev) => prev || currentTerm.academicYear);
+    setTermTerm((prev) => prev || currentTerm.term);
+  }, [currentTerm]);
+
+  // The AcademicTerm doc matching the currently selected year+term — its
+  // real start/end dates are what defines the "term" window, both for the
+  // trends fetch (via query params) and the client-side medication filter.
+  const selectedTermEntry = academicTerms.find(
+    (t) => t.academicYear === termAcademicYear && t.term === termTerm
+  );
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -71,12 +92,19 @@ export default function ReportsContent() {
 
   useEffect(() => {
     if (!studentId) return;
+    if (range === "term" && (!termAcademicYear || !termTerm)) return;
 
     const loadTrend = async () => {
       setLoading(true);
       try {
+        const query =
+          range === "term"
+            ? `range=term&academicYear=${encodeURIComponent(
+                termAcademicYear
+              )}&term=${encodeURIComponent(termTerm)}`
+            : `range=${range}`;
         const res = await fetch(
-          `${API_BASE}/students/${studentId}/symptom-trends?range=${range}`,
+          `${API_BASE}/students/${studentId}/symptom-trends?${query}`,
           { headers: authHeaders() }
         );
         const data = await res.json();
@@ -94,7 +122,7 @@ export default function ReportsContent() {
     };
 
     loadTrend();
-  }, [studentId, range]);
+  }, [studentId, range, termAcademicYear, termTerm]);
 
   useEffect(() => {
     if (!studentId) return;
@@ -118,12 +146,23 @@ export default function ReportsContent() {
   }, [studentId]);
 
   const medicationCutoff = new Date();
-  medicationCutoff.setDate(medicationCutoff.getDate() - RANGE_DAYS[range]);
+  let medicationEnd: Date | null = null;
+  if (range === "term") {
+    medicationCutoff.setTime(
+      selectedTermEntry ? new Date(selectedTermEntry.startDate).getTime() : 0
+    );
+    medicationEnd = selectedTermEntry
+      ? new Date(selectedTermEntry.endDate)
+      : null;
+  } else {
+    medicationCutoff.setDate(medicationCutoff.getDate() - RANGE_DAYS[range]);
+  }
 
   const medicationRows = symptomLogs
     .filter(
       (log) =>
         new Date(log.createdAt) >= medicationCutoff &&
+        (!medicationEnd || new Date(log.createdAt) <= medicationEnd) &&
         log.medications &&
         log.medications.length > 0
     )
@@ -146,7 +185,13 @@ export default function ReportsContent() {
         <div className="flex items-center gap-3">
           {studentId && (
             <Link
-              href={`/dashboard/print-report/${studentId}?range=${range}`}
+              href={`/dashboard/print-report/${studentId}?range=${range}${
+                range === "term"
+                  ? `&academicYear=${encodeURIComponent(
+                      termAcademicYear
+                    )}&term=${encodeURIComponent(termTerm)}`
+                  : ""
+              }`}
               target="_blank"
               className="text-sm bg-blue-900 hover:bg-blue-800 text-white rounded-full px-4 py-1.5"
             >
@@ -187,7 +232,46 @@ export default function ReportsContent() {
         >
           Quarterly Report
         </button>
+        <button
+          onClick={() => setRange("term")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded font-medium text-sm transition-colors ${
+            range === "term"
+              ? "bg-sky-300 text-gray-900"
+              : "bg-sky-100 text-gray-700 hover:bg-sky-200"
+          }`}
+        >
+          By Term
+        </button>
       </div>
+
+      {range === "term" && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          <select
+            value={termAcademicYear}
+            onChange={(e) => setTermAcademicYear(e.target.value)}
+            className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+          >
+            <option value="">Academic Year</option>
+            {academicYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <select
+            value={termTerm}
+            onChange={(e) => setTermTerm(e.target.value)}
+            className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+          >
+            <option value="">Term</option>
+            {TERMS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="bg-white rounded-md shadow-sm p-6 mb-6">
         <h2 className="text-sm font-semibold text-gray-800 mb-1">
@@ -198,7 +282,11 @@ export default function ReportsContent() {
               ? "Last 7 Days"
               : range === "monthly"
                 ? "Last 5 Weeks"
-                : "Last 13 Weeks"}
+                : range === "quarterly"
+                  ? "Last 13 Weeks"
+                  : selectedTermEntry
+                    ? `${termAcademicYear} ${termTerm}`
+                    : "Select a term"}
             )
           </span>
         </h2>
@@ -221,7 +309,11 @@ export default function ReportsContent() {
               ? "Last 7 Days"
               : range === "monthly"
                 ? "Last 5 Weeks"
-                : "Last 13 Weeks"}
+                : range === "quarterly"
+                  ? "Last 13 Weeks"
+                  : selectedTermEntry
+                    ? `${termAcademicYear} ${termTerm}`
+                    : "Select a term"}
             )
           </span>
         </h2>

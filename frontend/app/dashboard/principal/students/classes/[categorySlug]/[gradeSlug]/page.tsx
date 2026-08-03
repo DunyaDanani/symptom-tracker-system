@@ -9,8 +9,7 @@ import { getCategory, getGrade } from "@/lib/gradeTaxonomy";
 import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   flagged?: boolean;
@@ -114,9 +113,7 @@ export default function PrincipalClassGradePage({
             <tbody>
               {students.map((s) => (
                 <tr key={s._id} className="border-b border-gray-50">
-                  <td className="px-6 py-3">
-                    {s.firstName} {s.lastName}
-                  </td>
+                  <td className="px-6 py-3">{s.fullName}</td>
                   <td className="px-6 py-3">{s.section || "—"}</td>
                   <td className="px-6 py-3">
                     {s.assignedTeacher?.name || "Unassigned"}

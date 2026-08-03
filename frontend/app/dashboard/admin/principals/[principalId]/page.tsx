@@ -149,7 +149,7 @@ export default function EditPrincipalPage() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout breadcrumbLabels={{ [principalId]: principal.name }}>
       <BackButton />
       <div className="flex items-center gap-4 mt-2 mb-6">
         <Avatar name={principal.name} size="lg" />

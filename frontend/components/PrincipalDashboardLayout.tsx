@@ -7,9 +7,12 @@ import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import UserMenu from "./UserMenu";
 import { API_BASE } from "@/lib/config";
+import Breadcrumbs from "./Breadcrumbs";
 
 interface PrincipalDashboardLayoutProps {
   children: ReactNode;
+  /** Friendly labels for dynamic breadcrumb segments, e.g. { [studentId]: "Ayaan Perera" } */
+  breadcrumbLabels?: Record<string, string>;
 }
 
 const navItems = [
@@ -17,6 +20,7 @@ const navItems = [
   { label: "Notice", href: "/dashboard/principal/notice", icon: NoticeIcon },
   { label: "Messages", href: "/dashboard/principal/messages", icon: MessagesIcon },
   { label: "Student", href: "/dashboard/principal/students", icon: StudentIcon },
+  { label: "Teachers", href: "/dashboard/principal/teachers", icon: TeachersIcon },
   {
     label: "Teacher Requests",
     href: "/dashboard/principal/teacher-requests",
@@ -26,6 +30,7 @@ const navItems = [
 
 export default function PrincipalDashboardLayout({
   children,
+  breadcrumbLabels,
 }: PrincipalDashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -190,7 +195,10 @@ export default function PrincipalDashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-8 overflow-y-auto">
+          <Breadcrumbs labels={breadcrumbLabels} />
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -242,6 +250,14 @@ function StudentIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
+    </svg>
+  );
+}
+
+function TeachersIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
     </svg>
   );
 }

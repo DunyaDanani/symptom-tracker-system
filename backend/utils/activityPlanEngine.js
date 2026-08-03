@@ -108,8 +108,51 @@ const POSITIVE_SCORE_THRESHOLD = 4;
 const hasSymptom = (symptoms, match) =>
   symptoms.some((s) => s.includes(match));
 
-const pickAesthetic = (band, symptoms) => {
-  if (hasSymptom(symptoms, "Motor coordination or movement")) {
+// Loose keyword match against the student's free-text diagnosis field, so
+// the same three categories the alert/symptom rules already steer
+// (sensory/motor, social/communication, attention/learning) also get a
+// nudge from the child's actual diagnosis — not just today's emotion and
+// symptom log. Free-text on purpose: diagnosis is typed by an admin at
+// registration, not picked from a fixed list, so this can only ever be a
+// best-effort hint, never a hard rule.
+const hasDiagnosisKeyword = (diagnosis, keywords) => {
+  if (!diagnosis) return false;
+  const lower = diagnosis.toLowerCase();
+  return keywords.some((k) => lower.includes(k));
+};
+
+const SENSORY_MOTOR_KEYWORDS = [
+  "autis",
+  "sensory",
+  "motor",
+  "cerebral palsy",
+  "coordination",
+  "anxiety",
+];
+
+const SOCIAL_COMMUNICATION_KEYWORDS = [
+  "autis",
+  "speech",
+  "communication",
+  "social",
+  "non-verbal",
+  "nonverbal",
+];
+
+const ATTENTION_LEARNING_KEYWORDS = [
+  "adhd",
+  "attention",
+  "learning disab",
+  "dyslexia",
+  "dyscalculia",
+  "dysgraphia",
+];
+
+const pickAesthetic = (band, symptoms, diagnosis) => {
+  if (
+    hasSymptom(symptoms, "Motor coordination or movement") ||
+    hasDiagnosisKeyword(diagnosis, SENSORY_MOTOR_KEYWORDS)
+  ) {
     return AESTHETIC_CATALOG.sensoryPlay;
   }
   if (
@@ -122,10 +165,11 @@ const pickAesthetic = (band, symptoms) => {
   return AESTHETIC_CATALOG.freeDrawing;
 };
 
-const pickSocial = (band, symptoms) => {
+const pickSocial = (band, symptoms, diagnosis) => {
   if (
     hasSymptom(symptoms, "Social interaction") ||
-    hasSymptom(symptoms, "Communication difficulties")
+    hasSymptom(symptoms, "Communication difficulties") ||
+    hasDiagnosisKeyword(diagnosis, SOCIAL_COMMUNICATION_KEYWORDS)
   ) {
     return SOCIAL_CATALOG.buddyTime;
   }
@@ -133,13 +177,14 @@ const pickSocial = (band, symptoms) => {
   return SOCIAL_CATALOG.storyTime;
 };
 
-const pickAcademic = (band, symptoms) => {
+const pickAcademic = (band, symptoms, diagnosis) => {
   if (band === "low") return ACADEMIC_CATALOG.gentleReview;
   if (
     hasSymptom(symptoms, "Difficulty paying attention") ||
     hasSymptom(symptoms, "Difficulty following instructions") ||
     hasSymptom(symptoms, "Difficulty completing tasks") ||
-    hasSymptom(symptoms, "Learning or academic")
+    hasSymptom(symptoms, "Learning or academic") ||
+    hasDiagnosisKeyword(diagnosis, ATTENTION_LEARNING_KEYWORDS)
   ) {
     return ACADEMIC_CATALOG.focusGame;
   }
@@ -149,7 +194,8 @@ const pickAcademic = (band, symptoms) => {
 
 // score: today's compositeScore (1-5), or null/undefined if no check-in yet.
 // symptoms: flat array of symptom strings logged today (may be empty).
-export const buildActivityPlan = (score, symptoms = []) => {
+// diagnosis: the student's Student.diagnosis free-text field (may be "").
+export const buildActivityPlan = (score, symptoms = [], diagnosis = "") => {
   const band =
     score === null || score === undefined
       ? "steady"
@@ -162,9 +208,9 @@ export const buildActivityPlan = (score, symptoms = []) => {
   return {
     band,
     cards: [
-      pickAesthetic(band, symptoms),
-      pickSocial(band, symptoms),
-      pickAcademic(band, symptoms),
+      pickAesthetic(band, symptoms, diagnosis),
+      pickSocial(band, symptoms, diagnosis),
+      pickAcademic(band, symptoms, diagnosis),
     ],
   };
 };

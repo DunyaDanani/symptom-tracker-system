@@ -27,6 +27,14 @@ const teacherProfileSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // National Identity Card number — a personnel-record field collected
+    // at registration, not surfaced in student-facing contact info.
+    nic: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: true,

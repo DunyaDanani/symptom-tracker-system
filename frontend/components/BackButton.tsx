@@ -19,12 +19,12 @@ export default function BackButton({
     <button
       type="button"
       onClick={() => router.back()}
-      className={`inline-flex items-center gap-1.5 text-sm bg-white border border-gray-200 rounded-full pl-2.5 pr-4 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors ${className}`}
+      className={`inline-flex items-center gap-2 text-sm font-medium bg-emerald-400 rounded-full pl-3 pr-5 py-2 text-white hover:bg-emerald-500 transition-colors ${className}`}
     >
       <svg
         viewBox="0 0 20 20"
         fill="currentColor"
-        className="w-4 h-4 text-gray-500"
+        className="w-4 h-4 text-white"
         aria-hidden="true"
       >
         <path

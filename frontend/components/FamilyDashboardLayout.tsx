@@ -7,6 +7,7 @@ import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import UserMenu from "./UserMenu";
 import { API_BASE } from "@/lib/config";
+import Breadcrumbs from "./Breadcrumbs";
 
 // Shared dashboard shell for the Parent and Child roles. Their dashboards
 // are almost entirely the same UI (same shell, same Notice/Messages/
@@ -19,11 +20,14 @@ type FamilyRole = "parent" | "child";
 interface FamilyDashboardLayoutProps {
   role: FamilyRole;
   children: ReactNode;
+  /** Friendly labels for dynamic breadcrumb segments, e.g. { [subject]: "Mathematics" } */
+  breadcrumbLabels?: Record<string, string>;
 }
 
 export default function FamilyDashboardLayout({
   role,
   children,
+  breadcrumbLabels,
 }: FamilyDashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -31,8 +35,6 @@ export default function FamilyDashboardLayout({
 
   const [userName, setUserName] = useState<string>("User");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [switching, setSwitching] = useState(false);
-  const [viewedFromParent, setViewedFromParent] = useState(false);
 
   useEffect(() => {
     // localStorage is only available client-side, so this can't be read
@@ -40,28 +42,34 @@ export default function FamilyDashboardLayout({
     const storedName = localStorage.getItem("name");
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value, not derived state
     if (storedName) setUserName(storedName);
-    if (role === "child") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value, not derived state
-      if (localStorage.getItem("parentToken")) setViewedFromParent(true);
-    }
   }, [role]);
 
-  // Client meeting 20 Feb 2026: the child dashboard should stay focused
-  // on Study Module + suggested activities after emotion tracking — no
-  // Messages/"serious" content. Messages stay on the parent side only.
+  // There is no child login/dashboard — this layout is now only ever used
+  // with role="parent". (The "child" role variant of both the nav items
+  // and the "View Child's Dashboard" switcher below were removed along
+  // with the child dashboard pages; emotion check-ins are recorded by the
+  // shadow teacher instead.)
   const navItems = [
     { label: "Dashboard", href: basePath, icon: DashboardIcon },
     { label: "Notice", href: `${basePath}/notice`, icon: NoticeIcon },
-    ...(role === "parent"
-      ? [
-          { label: "Messages", href: `${basePath}/messages`, icon: MessagesIcon },
-          {
-            label: "Doctor's Recommendation",
-            href: `${basePath}/doctor-documents`,
-            icon: DoctorIcon,
-          },
-        ]
-      : []),
+    { label: "Messages", href: `${basePath}/messages`, icon: MessagesIcon },
+    { label: "Study Module", href: `${basePath}/study-module`, icon: StudyIcon },
+    {
+      label: "Emotion History",
+      href: `${basePath}/emotion-history`,
+      icon: EmotionIcon,
+    },
+    {
+      label: "Symptom History",
+      href: `${basePath}/symptom-history`,
+      icon: SymptomIcon,
+    },
+    { label: "Reports", href: `${basePath}/reports`, icon: ReportsIcon },
+    {
+      label: "Doctor's Recommendation",
+      href: `${basePath}/doctor-documents`,
+      icon: DoctorIcon,
+    },
   ];
 
   const handleLogout = () => {
@@ -71,57 +79,6 @@ export default function FamilyDashboardLayout({
     localStorage.removeItem("parentToken");
     localStorage.removeItem("parentName");
     router.push("/login");
-  };
-
-  // Parent-only: open the linked child's dashboard directly from this
-  // session, no separate child login required. The parent's own token is
-  // stashed so the child view can offer a way back.
-  const handleViewChild = async () => {
-    setSwitching(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `${API_BASE}/auth/view-as-child`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
-      if (!data.success) {
-        alert(data.message || "Could not open your child's dashboard.");
-        setSwitching(false);
-        return;
-      }
-
-      localStorage.setItem("parentToken", localStorage.getItem("token") || "");
-      localStorage.setItem("parentName", localStorage.getItem("name") || "");
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("role", data.role);
-      localStorage.setItem("name", data.name || "");
-
-      router.push("/dashboard/child");
-    } catch (err) {
-      console.error("Failed to switch to child view", err);
-      alert("Unable to reach the server.");
-      setSwitching(false);
-    }
-  };
-
-  // Child-only: if this session was opened via a parent's "View Child's
-  // Dashboard" button, restores the parent's own session instead of
-  // logging out entirely.
-  const handleReturnToParent = () => {
-    const parentToken = localStorage.getItem("parentToken");
-    const parentName = localStorage.getItem("parentName");
-    if (!parentToken) return;
-
-    localStorage.setItem("token", parentToken);
-    localStorage.setItem("role", "parent");
-    localStorage.setItem("name", parentName || "");
-    localStorage.removeItem("parentToken");
-    localStorage.removeItem("parentName");
-    router.push("/dashboard/parent");
   };
 
   return (
@@ -215,27 +172,6 @@ export default function FamilyDashboardLayout({
 
           <div className="flex items-center gap-6">
             {role === "parent" && (
-              <button
-                type="button"
-                onClick={handleViewChild}
-                disabled={switching}
-                className="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-full px-3 py-1.5 transition-colors disabled:opacity-60"
-              >
-                {switching ? "Opening..." : "View Child's Dashboard"}
-              </button>
-            )}
-
-            {role === "child" && viewedFromParent && (
-              <button
-                type="button"
-                onClick={handleReturnToParent}
-                className="text-xs bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-full px-3 py-1.5 transition-colors"
-              >
-                &larr; Return to Parent Dashboard
-              </button>
-            )}
-
-            {role === "parent" && (
               <>
                 <Link
                   href={`${basePath}/messages`}
@@ -258,7 +194,10 @@ export default function FamilyDashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-8 overflow-y-auto">
+          <Breadcrumbs labels={breadcrumbLabels} />
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -301,6 +240,62 @@ function DoctorIcon({ className }: { className?: string }) {
         d="M10 2a1 1 0 011 1v1h4a1 1 0 011 1v3.5c0 4-2.5 6.5-6 7.5-3.5-1-6-3.5-6-7.5V5a1 1 0 011-1h4V3a1 1 0 011-1zm-1 5a1 1 0 112 0v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H8a1 1 0 110-2h1V7z"
         clipRule="evenodd"
       />
+    </svg>
+  );
+}
+
+function EmotionIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2zm-7.536 5.879a1 1 0 011.415 0 3 3 0 004.242 0 1 1 0 111.415 1.415 5 5 0 01-7.072 0 1 1 0 010-1.415z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function SymptomIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M9 2a1 1 0 00-1 1v1H7a2 2 0 00-2 2v10a2 2 0 002 2h6a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 00-1-1H9zm0 7a1 1 0 012 0v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H8a1 1 0 110-2h1V9z" />
+    </svg>
+  );
+}
+
+function BreakTimeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function StudyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0z" />
+    </svg>
+  );
+}
+
+function ReportsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1v-6zM8 7a1 1 0 011-1h2a1 1 0 011 1v10a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v13a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+    </svg>
+  );
+}
+
+function ActivityIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M12 2a1 1 0 01.967.744L14.146 7.2 17.5 8.5a1 1 0 010 1.864l-3.354 1.3-1.18 4.455a1 1 0 01-1.933 0L9.854 11.664 6.5 10.364a1 1 0 010-1.864l3.354-1.3L11.033 2.744A1 1 0 0112 2zM5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1z" />
     </svg>
   );
 }

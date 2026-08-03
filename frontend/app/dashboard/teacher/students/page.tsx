@@ -8,8 +8,7 @@ import { API_BASE } from "@/lib/config";
 
 interface AssignedStudent {
   _id: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   diagnosis: string;
@@ -74,7 +73,7 @@ export default function TeacherStudentsPage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="font-semibold text-gray-800">
-                  {s.firstName} {s.lastName}
+                  {s.fullName}
                 </p>
                 {s.flagged && (
                   <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full shrink-0">

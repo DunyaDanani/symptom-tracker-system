@@ -184,7 +184,7 @@ export const getAllDoctorDocuments = async (req, res) => {
     }
 
     const documents = await DoctorDocument.find(filter)
-      .populate("student", "firstName lastName grade section branch")
+      .populate("student", "fullName grade section branch")
       .populate("reviewedBy", "name")
       .sort({ createdAt: -1 });
 

@@ -6,9 +6,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import AlertsNotificationsBell from "./AlertsNotificationsBell";
 import UserMenu from "./UserMenu";
+import Breadcrumbs from "./Breadcrumbs";
 
 interface DashboardLayoutProps {
   children: ReactNode;
+  /** Friendly labels for dynamic breadcrumb segments, e.g. { [studentId]: "Ayaan Perera" } */
+  breadcrumbLabels?: Record<string, string>;
+  /** Overrides the breadcrumb segments between "Dashboard" and the current page — see Breadcrumbs.tsx */
+  breadcrumbMiddleCrumbs?: { href: string; label: string }[];
 }
 
 const navItems = [
@@ -18,9 +23,14 @@ const navItems = [
   { label: "Doctor's Recommendation", href: "/dashboard/admin/doc-reviews", icon: DocIcon },
   { label: "Notice", href: "/dashboard/admin/notice", icon: NoticeIcon },
   { label: "Alerts", href: "/dashboard/admin/alerts", icon: AlertIcon },
+  { label: "Academic Terms", href: "/dashboard/admin/academic-terms", icon: CalendarIcon },
 ];
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({
+  children,
+  breadcrumbLabels,
+  breadcrumbMiddleCrumbs,
+}: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [userName, setUserName] = useState<string>("User");
@@ -127,7 +137,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-8 overflow-y-auto">
+          <Breadcrumbs labels={breadcrumbLabels} middleCrumbs={breadcrumbMiddleCrumbs} />
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -188,6 +201,18 @@ function AlertIcon({ className }: { className?: string }) {
       <path
         fillRule="evenodd"
         d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l6.28 11.19c.75 1.334-.213 2.98-1.742 2.98H3.72c-1.53 0-2.492-1.646-1.743-2.98l6.28-11.19zM11 14a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path
+        fillRule="evenodd"
+        d="M6 2a1 1 0 011 1v1h6V3a1 1 0 112 0v1h1a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h1V3a1 1 0 011-1zm10 6H4v8a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V8z"
         clipRule="evenodd"
       />
     </svg>

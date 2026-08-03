@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { TERMS } from "./AcademicTerm.js";
 
 export const SYMPTOM_OPTIONS = [
   "Difficulty paying attention",
@@ -29,6 +30,23 @@ const symptomLogSchema = new mongoose.Schema(
     symptoms: {
       type: [String],
       default: [],
+    },
+
+    // Academic Year / Term this log belongs to — manually chosen by
+    // whoever logs it (shadow teacher or admin), since createdAt reflects
+    // when the entry was typed in, not necessarily the day it was
+    // observed (e.g. catching up on yesterday's log). Required so every
+    // report can reliably group/filter by term.
+    academicYear: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    term: {
+      type: String,
+      enum: TERMS,
+      required: true,
     },
 
     additionalNotes: {

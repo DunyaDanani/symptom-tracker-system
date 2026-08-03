@@ -12,8 +12,7 @@ interface AlertItem {
   createdAt: string;
   student: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    fullName: string;
     grade?: string;
     section?: string;
     branch?: string;
@@ -67,7 +66,7 @@ export default function AlertsNotificationsBell({
 
     freshAlerts.forEach((alert) => {
       const studentName = alert.student
-        ? `${alert.student.firstName} ${alert.student.lastName}`
+        ? alert.student.fullName
         : "A student";
       const notification = new Notification(
         `${TYPE_LABEL[alert.type]} alert`,
@@ -224,7 +223,7 @@ export default function AlertsNotificationsBell({
                         </p>
                         <p className="text-sm text-gray-700 mt-0.5">
                           {alert.student
-                            ? `${alert.student.firstName} ${alert.student.lastName}`
+                            ? alert.student.fullName
                             : "Unknown student"}
                         </p>
                         <p className="text-xs text-gray-400 mt-0.5">

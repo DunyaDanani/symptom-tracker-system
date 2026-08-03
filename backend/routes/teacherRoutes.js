@@ -3,8 +3,13 @@ import {
   getMyStudents,
   logSymptoms,
   getSymptomHistory,
+  updateOwnSymptomLog,
+  deleteOwnSymptomLog,
+  submitChildEmojiCheckin,
   submitEmotionCheckin,
   getEmotionHistory,
+  updateOwnEmotionCheckin,
+  deleteOwnEmotionCheckin,
   getStudentToday,
   getSymptomOptions,
   getMyTeacherProfile,
@@ -46,7 +51,17 @@ router.get("/students/:studentId/today", getStudentToday);
 router.get("/students/:studentId/symptoms", getSymptomHistory);
 router.get("/students/:studentId/emotion-history", getEmotionHistory);
 router.post("/symptoms", logSymptoms);
+// A teacher can edit/delete symptom logs they recorded themselves —
+// ownership is checked inside the controller, not here.
+router.patch("/symptoms/:logId", updateOwnSymptomLog);
+router.delete("/symptoms/:logId", deleteOwnSymptomLog);
+// Emotion check-in popup: step 1 records the child's tap, step 2 records
+// the teacher's own tap and returns the FR-09 activity plan.
+router.post("/emotion-checkin/child", submitChildEmojiCheckin);
 router.post("/emotion-checkin", submitEmotionCheckin);
+// Same "own entries only" edit/delete as symptom logs above.
+router.patch("/emotion-checkin/:checkinId", updateOwnEmotionCheckin);
+router.delete("/emotion-checkin/:checkinId", deleteOwnEmotionCheckin);
 router.patch("/students/:studentId/flag", setStudentFlag);
 router.get("/break-activity-options", getBreakActivityOptions);
 router.post("/break-activities", logBreakActivity);

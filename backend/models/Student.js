@@ -42,13 +42,7 @@ const studentSchema = new mongoose.Schema(
       trim: true,
     },
 
-    firstName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    lastName: {
+    fullName: {
       type: String,
       required: true,
       trim: true,
@@ -62,6 +56,15 @@ const studentSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ["male", "female", "other"],
+      required: true,
+    },
+
+    // Which curriculum pathway the student follows — drives which grades
+    // are offered for the Senior Secondary and Advanced Level education
+    // stages in the admit wizard (see frontend/lib/gradeTaxonomy.ts).
+    programCategory: {
+      type: String,
+      enum: ["national", "cambridge"],
       required: true,
     },
 

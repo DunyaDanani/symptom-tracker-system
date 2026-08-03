@@ -6,20 +6,26 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import UserMenu from "./UserMenu";
+import Breadcrumbs from "./Breadcrumbs";
 
 interface TeacherDashboardLayoutProps {
   children: ReactNode;
+  /** Friendly labels for dynamic breadcrumb segments, e.g. { [studentId]: "Ayaan Perera" } */
+  breadcrumbLabels?: Record<string, string>;
 }
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard/teacher", icon: DashboardIcon },
   { label: "Notice", href: "/dashboard/teacher/notice", icon: NoticeIcon },
   { label: "Messages", href: "/dashboard/teacher/messages", icon: MessagesIcon },
+  { label: "Students", href: "/dashboard/teacher/students", icon: StudentIcon },
   { label: "Upload Modules", href: "/dashboard/teacher/upload-modules", icon: UploadIcon },
+  { label: "Reports", href: "/dashboard/teacher/reports", icon: ReportsIcon },
 ];
 
 export default function TeacherDashboardLayout({
   children,
+  breadcrumbLabels,
 }: TeacherDashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -150,7 +156,10 @@ export default function TeacherDashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-8 overflow-y-auto">
+          <Breadcrumbs labels={breadcrumbLabels} />
+          {children}
+        </main>
       </div>
     </div>
   );
@@ -193,6 +202,22 @@ function UploadIcon({ className }: { className?: string }) {
         d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
         clipRule="evenodd"
       />
+    </svg>
+  );
+}
+
+function StudentIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
+    </svg>
+  );
+}
+
+function ReportsIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+      <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1v-6zM8 7a1 1 0 011-1h2a1 1 0 011 1v10a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v13a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
     </svg>
   );
 }

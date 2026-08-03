@@ -271,6 +271,37 @@ export const updatePrincipal = async (req, res) => {
   }
 };
 
+// @route   DELETE /api/staff/principals/:id
+// @access  Admin only
+export const deletePrincipal = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const principal = await User.findOneAndDelete({
+      _id: id,
+      role: "principal",
+    });
+
+    if (!principal) {
+      return res.status(404).json({
+        success: false,
+        message: "Principal not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Principal deleted",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+  }
+};
+
 // @route   GET /api/staff/alerts?status=open|all&branch=<branch>
 // @access  Admin only
 // FR-10: powers the admin notification bell / alerts page. Defaults to
@@ -296,7 +327,7 @@ export const getAlerts = async (req, res) => {
     }
 
     const alerts = await Alert.find(filter)
-      .populate("student", "firstName lastName grade section branch")
+      .populate("student", "fullName grade section branch")
       .populate("acknowledgedBy", "name")
       .sort({ createdAt: -1 });
 

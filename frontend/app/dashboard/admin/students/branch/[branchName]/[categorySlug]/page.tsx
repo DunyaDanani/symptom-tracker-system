@@ -14,8 +14,7 @@ import { API_BASE } from "@/lib/config";
 interface Student {
   _id: string;
   admissionNumber?: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   grade: string;
   section?: string;
   branch: string;
@@ -164,9 +163,7 @@ function StudentTable({
               <td className="px-6 py-3 text-gray-500">
                 {s.admissionNumber || "—"}
               </td>
-              <td className="px-6 py-3">
-                {s.firstName} {s.lastName}
-              </td>
+              <td className="px-6 py-3">{s.fullName}</td>
               <td className="px-6 py-3">
                 {s.grade}
                 {s.section ? ` · ${s.section}` : ""}

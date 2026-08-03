@@ -1,16 +1,38 @@
 /**
- * Single source of truth for the Branch -> Category -> Grade drill-down
- * on the admin Branches page.
+ * Single source of truth for the Branch -> Education Stage -> Grade
+ * drill-down on the admin/principal Branches pages, and for the Education
+ * Stage / Grade selects in the admit wizard.
  *
  * `label` is the EXACT string stored in Student.grade — the admit wizard
  * writes it, and this file reads it back to group students into folders.
- * Grade 8-10 appear twice (National vs Cambridge) with different labels
- * so they don't collide even though the grade number repeats.
+ *
+ * Senior Secondary and Advanced Level are "category-dependent" stages: the
+ * grades on offer differ depending on the student's Category (National vs
+ * Cambridge pathway, stored on Student.programCategory). Each grade entry
+ * in those stages carries a `category` tag so the admit wizard can filter
+ * down to just the ones that apply, while folder-browse pages (which just
+ * group already-admitted students) can keep listing every grade in the
+ * stage regardless of category.
+ *
+ * Grade labels are kept distinct across categories (e.g. "Grade 8
+ * (National)" vs "Grade 8 (Cambridge)") so they don't collide even though
+ * the grade number repeats.
  */
+
+export type ProgramCategory = "national" | "cambridge";
+
+export const PROGRAM_CATEGORIES: { value: ProgramCategory; label: string }[] = [
+  { value: "national", label: "National" },
+  { value: "cambridge", label: "Cambridge" },
+];
 
 export interface GradeEntry {
   slug: string;
   label: string; // must match Student.grade exactly
+  /** Only set within a category-dependent stage (Senior Secondary,
+   *  Advanced Level) — tells the admit wizard which Category this grade
+   *  belongs to. Undefined for grades that apply regardless of category. */
+  category?: ProgramCategory;
 }
 
 export interface CategoryEntry {
@@ -49,30 +71,26 @@ export const GRADE_TAXONOMY: CategoryEntry[] = [
     ],
   },
   {
-    slug: "senior-secondary-national",
-    label: "Senior Secondary (National Pathway)",
+    slug: "senior-secondary",
+    label: "Senior Secondary",
     grades: [
-      { slug: "grade-8", label: "Grade 8 (National)" },
-      { slug: "grade-9", label: "Grade 9 (National)" },
-      { slug: "grade-10", label: "Grade 10 (National)" },
-      { slug: "grade-11", label: "Grade 11 (National)" },
-    ],
-  },
-  {
-    slug: "senior-secondary-cambridge",
-    label: "Senior Secondary (Cambridge Pathway)",
-    grades: [
-      { slug: "grade-8", label: "Grade 8 (Cambridge)" },
-      { slug: "grade-9", label: "Grade 9 (Cambridge)" },
-      { slug: "grade-10", label: "Grade 10 (Cambridge)" },
+      { slug: "grade-8-national", label: "Grade 8 (National)", category: "national" },
+      { slug: "grade-9-national", label: "Grade 9 (National)", category: "national" },
+      { slug: "grade-10-national", label: "Grade 10 (National)", category: "national" },
+      { slug: "grade-11-national", label: "Grade 11 (National)", category: "national" },
+      { slug: "grade-8-cambridge", label: "Grade 8 (Cambridge)", category: "cambridge" },
+      { slug: "grade-9-cambridge", label: "Grade 9 (Cambridge)", category: "cambridge" },
+      { slug: "grade-10-cambridge", label: "Grade 10 (Cambridge)", category: "cambridge" },
     ],
   },
   {
     slug: "advanced-level",
-    label: "Advanced Level (AS & A2) (Cambridge Pathway)",
+    label: "Advanced Level",
     grades: [
-      { slug: "as-level", label: "AS Level" },
-      { slug: "a2-level", label: "A2 Level" },
+      { slug: "grade-12-national", label: "Grade 12 (National)", category: "national" },
+      { slug: "grade-13-national", label: "Grade 13 (National)", category: "national" },
+      { slug: "as-level", label: "AS Level (Cambridge)", category: "cambridge" },
+      { slug: "a2-level", label: "A2 Level (Cambridge)", category: "cambridge" },
     ],
   },
 ];
@@ -94,7 +112,24 @@ export function getGrade(categorySlug: string, gradeSlug: string): GradeEntry | 
   return getCategory(categorySlug)?.grades.find((g) => g.slug === gradeSlug);
 }
 
-// Given a student's raw grade string, returns which category it belongs to
+// Given an education stage and the student's Category, returns just the
+// grades that apply. Stages that aren't category-dependent (Pre-School,
+// Primary Education, Junior Secondary) ignore `programCategory` and always
+// return their full grade list. Category-dependent stages (Senior
+// Secondary, Advanced Level) return [] until a Category is chosen.
+export function getGradesForCategory(
+  stageSlug: string,
+  programCategory: ProgramCategory | ""
+): GradeEntry[] {
+  const stage = getCategory(stageSlug);
+  if (!stage) return [];
+  const isCategoryDependent = stage.grades.some((g) => g.category);
+  if (!isCategoryDependent) return stage.grades;
+  if (!programCategory) return [];
+  return stage.grades.filter((g) => g.category === programCategory);
+}
+
+// Given a student's raw grade string, returns which stage it belongs to
 // (or null if it doesn't match anything in the taxonomy).
 export function categoryForGrade(gradeValue: string): CategoryEntry | null {
   for (const category of GRADE_TAXONOMY) {
