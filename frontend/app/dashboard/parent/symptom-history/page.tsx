@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import SecureContentGate from "@/components/SecureContentGate";
 import BackButton from "@/components/BackButton";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
 
 interface MedicationEntry {
@@ -26,6 +28,8 @@ function SymptomHistoryContent() {
   const [logs, setLogs] = useState<SymptomLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -71,8 +75,28 @@ function SymptomHistoryContent() {
     return <p className="text-red-500 text-sm">{error}</p>;
   }
 
+  const filteredLogs = filterByDateRange(
+    logs,
+    dateFrom,
+    dateTo,
+    (log) => log.createdAt
+  );
+
   return (
     <div className="bg-white rounded-md shadow-sm overflow-hidden">
+      <div className="p-4 border-b border-gray-100">
+        <DateRangeFilter
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={setDateFrom}
+          onToChange={setDateTo}
+          onClear={() => {
+            setDateFrom("");
+            setDateTo("");
+          }}
+          resultCount={filteredLogs.length}
+        />
+      </div>
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 text-left">
@@ -82,14 +106,16 @@ function SymptomHistoryContent() {
           </tr>
         </thead>
         <tbody>
-          {logs.length === 0 ? (
+          {filteredLogs.length === 0 ? (
             <tr>
               <td colSpan={3} className="px-4 py-4 text-gray-400">
-                No symptom logs yet.
+                {logs.length === 0
+                  ? "No symptom logs yet."
+                  : "No symptom logs in this date range."}
               </td>
             </tr>
           ) : (
-            logs.map((log) => (
+            filteredLogs.map((log) => (
               <tr key={log._id} className="border-b border-gray-50">
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap align-top">
                   {new Date(log.createdAt).toLocaleString()}

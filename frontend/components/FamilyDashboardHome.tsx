@@ -83,32 +83,20 @@ export default function FamilyDashboardHome({
             color: "bg-emerald-50 text-emerald-600",
             href: `${basePath}/reports`,
           },
-        ]
-      : // Child dashboard: only the things a child actually uses day to
-        // day, in the order they naturally happen — check in with an
-        // emoji, see what's suggested for today, then open school work.
-        // "Serious" adult-facing content (Reports, Messages) lives on the
-        // parent side instead, per the 20 Feb 2026 client meeting.
-        [
           {
-            label: "Emotion Tracker",
+            label: "Symptom History",
+            icon: SymptomIcon,
+            color: "bg-blue-50 text-blue-600",
+            href: `${basePath}/symptom-history`,
+          },
+          {
+            label: "Emotion History",
             icon: EmotionIcon,
-            color: "bg-pink-100 text-pink-600",
-            href: `${basePath}/emotion-checkin`,
-          },
-          {
-            label: "My Activities",
-            icon: ActivityIcon,
-            color: "bg-yellow-100 text-yellow-600",
-            href: `${basePath}/activity-plan`,
-          },
-          {
-            label: "Study Module",
-            icon: StudyIcon,
-            color: "bg-blue-100 text-blue-600",
-            href: `${basePath}/study-module`,
-          },
-        ];
+            color: "bg-blue-50 text-blue-600",
+            href: `${basePath}/emotion-history`,
+          }
+        ]
+      :[]
 
   if (role === "child") {
     return (

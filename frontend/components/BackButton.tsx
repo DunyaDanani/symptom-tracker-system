@@ -1,11 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 // Universal "back" control — uses browser history instead of a hardcoded
 // route, so it always returns to wherever the user actually came from
 // (a student list, a search result, another sub-page, etc.) instead of
 // forcing a trip back to the dashboard home every time.
+//
+// Styled as a low-emphasis inline link (not a solid pill) so it reads as
+// a secondary nav affordance alongside the breadcrumb trail above it,
+// rather than competing with the page's primary action button. Callers
+// are expected to place it inline with the page title/header row instead
+// of floating alone above the content.
 export default function BackButton({
   label = "Back",
   className = "",
@@ -14,17 +20,37 @@ export default function BackButton({
   className?: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+
+  const handleBack = () => {
+    // router.back() silently no-ops if this tab has no prior in-app
+    // history (e.g. the page was opened via a bookmark, a shared link,
+    // or a hard refresh) — falling through to nothing happening is
+    // confusing. In that case, fall back to this role's dashboard root
+    // (derived the same way Breadcrumbs.tsx does: /dashboard/<role>)
+    // rather than leaving the button dead.
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    const segments = pathname?.split("/").filter(Boolean) ?? [];
+    const fallback =
+      segments.length >= 2 ? `/${segments[0]}/${segments[1]}` : "/";
+    router.push(fallback);
+  };
 
   return (
     <button
       type="button"
-      onClick={() => router.back()}
-      className={`inline-flex items-center gap-2 text-sm font-medium bg-emerald-400 rounded-full pl-3 pr-5 py-2 text-white hover:bg-emerald-500 transition-colors ${className}`}
+      onClick={handleBack}
+      aria-label={label || "Go back"}
+      title={label || "Go back"}
+      className={`inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-blue-700 transition-colors ${className}`}
     >
       <svg
         viewBox="0 0 20 20"
         fill="currentColor"
-        className="w-4 h-4 text-white"
+        className="w-4 h-4 shrink-0"
         aria-hidden="true"
       >
         <path

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import SecureContentGate from "@/components/SecureContentGate";
 import BackButton from "@/components/BackButton";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
 
 interface EmotionCheckinEntry {
@@ -75,6 +77,8 @@ function EmotionHistoryContent() {
   const [checkins, setCheckins] = useState<EmotionCheckinEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -119,6 +123,9 @@ function EmotionHistoryContent() {
     return <p className="text-red-500 text-sm">{error}</p>;
   }
 
+  // Suggested activities are always based on the most recent 7 check-ins
+  // overall, regardless of the date filter applied to the table below —
+  // the filter is for browsing history, not for changing the suggestion.
   const recent = checkins.slice(0, 7);
   const avgScore =
     recent.length > 0
@@ -126,12 +133,32 @@ function EmotionHistoryContent() {
       : null;
   const suggestions = getSuggestions(avgScore);
 
+  const filteredCheckins = filterByDateRange(
+    checkins,
+    dateFrom,
+    dateTo,
+    (c) => c.createdAt
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div className="bg-white rounded-md shadow-sm overflow-hidden">
         <h2 className="text-sm font-semibold text-gray-700 p-6 pb-0">
           Check-in History
         </h2>
+        <div className="px-6 pt-4">
+          <DateRangeFilter
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            onClear={() => {
+              setDateFrom("");
+              setDateTo("");
+            }}
+            resultCount={filteredCheckins.length}
+          />
+        </div>
         <table className="w-full text-sm mt-4">
           <thead>
             <tr className="border-b border-gray-100 text-left">
@@ -144,14 +171,16 @@ function EmotionHistoryContent() {
             </tr>
           </thead>
           <tbody>
-            {checkins.length === 0 ? (
+            {filteredCheckins.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-4 text-gray-400">
-                  No check-ins yet.
+                  {checkins.length === 0
+                    ? "No check-ins yet."
+                    : "No check-ins in this date range."}
                 </td>
               </tr>
             ) : (
-              checkins.map((c) => (
+              filteredCheckins.map((c) => (
                 <tr key={c._id} className="border-b border-gray-50">
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {new Date(c.createdAt).toLocaleString()}

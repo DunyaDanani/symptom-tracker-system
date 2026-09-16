@@ -21,6 +21,7 @@
     "multer": "^2.0.0",
     "mysql2": "^3.22.5",
     "nodemailer": "^9.0.3",
+    "openai": "^7.3.0",
     "puppeteer": "^24.15.0"
   },
   "devDependencies": {

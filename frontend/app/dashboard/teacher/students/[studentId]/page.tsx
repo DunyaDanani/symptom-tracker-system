@@ -182,7 +182,7 @@ export default function TeacherStudentHubPage({
             <div className="lg:col-span-2">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Link
-                  href={`/dashboard/teacher/students/${studentId}/symptoms`}
+                  href={`/dashboard/teacher/students/${studentId}/symptoms/history`}
                   className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
                 >
                   <p className="font-semibold text-gray-800">Symptom History</p>
@@ -192,7 +192,7 @@ export default function TeacherStudentHubPage({
                 </Link>
 
                 <Link
-                  href={`/dashboard/teacher/students/${studentId}/emotion`}
+                  href={`/dashboard/teacher/students/${studentId}/emotion/history`}
                   className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
                 >
                   <p className="font-semibold text-gray-800">Emotion History</p>

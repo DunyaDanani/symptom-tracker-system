@@ -12,7 +12,42 @@ import {
   raiseManualFlagAlert,
   clearManualFlagAlert,
 } from "../utils/alertEngine.js";
-import { buildActivityPlan } from "../utils/activityPlanEngine.js";
+import { buildAiActivityPlan } from "../utils/aiActivityPlanEngine.js";
+
+// Shared by submitEmotionCheckin, getEmotionHistory's lazy backfill, and
+// updateOwnEmotionCheckin's regenerate-on-edit — builds the AI activity
+// plan for one check-in, persists it onto that exact record (see
+// EmotionCheckin.activityPlan), and returns it. symptoms should be
+// whatever was logged on the same calendar day as the check-in.
+const generateAndSaveActivityPlan = async (checkin, student, symptoms) => {
+  const plan = await buildAiActivityPlan({
+    childEmoji: checkin.childEmoji,
+    teacherEmoji: checkin.teacherEmoji,
+    compositeScore: checkin.compositeScore,
+    symptoms,
+    diagnosis: student.diagnosis,
+  });
+
+  checkin.activityPlan = { ...plan, generatedAt: new Date() };
+  await checkin.save();
+
+  return checkin.activityPlan;
+};
+
+// Symptoms logged for a student on the same calendar day as `date`.
+const symptomsLoggedOn = async (studentId, date) => {
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const logs = await SymptomLog.find({
+    student: studentId,
+    createdAt: { $gte: startOfDay, $lte: endOfDay },
+  }).select("symptoms");
+
+  return logs.flatMap((log) => log.symptoms);
+};
 
 // Client meeting 20 Feb 2026: "Symptom tracker access should be extended
 // to all subject teachers, including Class Teachers and Subject
@@ -457,8 +492,11 @@ export const submitChildEmojiCheckin = async (req, res) => {
 //
 // FR-09: because this is the step that completes the emoji pair, it also
 // builds and returns the personalised 3-activity plan (Aesthetic, Social,
-// Academic — see utils/activityPlanEngine.js) so the popup can show it
-// immediately as the final screen, without a separate fetch.
+// Academic — see utils/aiActivityPlanEngine.js, which calls out to an LLM
+// using both emojis + the student's diagnosis and falls back to the
+// deterministic utils/activityPlanEngine.js rules if that call fails) so
+// the popup can show it immediately as the final screen, without a
+// separate fetch.
 export const submitEmotionCheckin = async (req, res) => {
   const { studentId, teacherEmoji, checkinId } = req.body;
 
@@ -515,20 +553,14 @@ export const submitEmotionCheckin = async (req, res) => {
     await evaluateThresholds(studentId);
 
     // FR-09: build the activity plan from the (now possibly complete)
-    // composite score plus whatever symptoms have been logged today.
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-    const symptomLogsToday = await SymptomLog.find({
-      student: studentId,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    }).select("symptoms");
-    const symptomsToday = symptomLogsToday.flatMap((log) => log.symptoms);
-    const activityPlan = buildActivityPlan(
-      checkin.compositeScore,
-      symptomsToday,
-      student.diagnosis
+    // composite score plus whatever symptoms have been logged today, and
+    // persist it onto this check-in so the History table can show exactly
+    // what was suggested for this specific entry later on.
+    const symptomsToday = await symptomsLoggedOn(studentId, new Date());
+    const activityPlan = await generateAndSaveActivityPlan(
+      checkin,
+      student,
+      symptomsToday
     );
 
     res.status(201).json({
@@ -564,34 +596,35 @@ export const getEmotionHistory = async (req, res) => {
       });
     }
 
+    // Each checkin already carries its own stored activityPlan (set at the
+    // moment it was completed — see generateAndSaveActivityPlan), so the
+    // History table can show exactly what was suggested for every past
+    // entry, not just today's, with no extra AI calls on every page load.
     const checkins = await EmotionCheckin.find({ student: studentId }).sort({
       createdAt: -1,
     });
 
     // FR-09: alongside the raw history, also surface a suggested activity
     // plan so the Emotion Tracker page can show "what to try next" without
-    // needing a brand new check-in just to see it — built from the most
-    // recent check-in's mood, today's logged symptoms, and the child's own
-    // diagnosis (see utils/activityPlanEngine.js), the same rules engine
-    // used right after a check-in is submitted.
+    // needing a brand new check-in just to see it. Normally this is just
+    // the most recent check-in's already-stored plan; it's only generated
+    // here (and backfilled onto that record) for older check-ins that
+    // predate this field, or ones where the AI/rules call never got a
+    // chance to run.
     const latestCheckin = checkins[0] || null;
+    let activityPlan = latestCheckin?.activityPlan || null;
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const symptomLogsToday = await SymptomLog.find({
-      student: studentId,
-      createdAt: { $gte: startOfDay, $lte: endOfDay },
-    }).select("symptoms");
-    const symptomsToday = symptomLogsToday.flatMap((log) => log.symptoms);
-
-    const activityPlan = buildActivityPlan(
-      latestCheckin?.compositeScore,
-      symptomsToday,
-      student.diagnosis
-    );
+    if (latestCheckin && !activityPlan && latestCheckin.compositeScore) {
+      const symptomsThatDay = await symptomsLoggedOn(
+        studentId,
+        latestCheckin.createdAt
+      );
+      activityPlan = await generateAndSaveActivityPlan(
+        latestCheckin,
+        student,
+        symptomsThatDay
+      );
+    }
 
     res.json({
       success: true,
@@ -654,6 +687,21 @@ export const updateOwnEmotionCheckin = async (req, res) => {
     }
 
     await checkin.save();
+
+    // FR-09: an edited emoji can change the mood this check-in represents,
+    // so regenerate its stored activity plan to match — otherwise the
+    // History entry would keep showing a suggestion based on the old,
+    // now-corrected emoji. Only worth doing once the score is complete
+    // (compositeScore set); a still-partial check-in has nothing to
+    // suggest from yet.
+    if (checkin.compositeScore) {
+      const student = await Student.findById(checkin.student);
+      const symptomsThatDay = await symptomsLoggedOn(
+        checkin.student,
+        checkin.createdAt
+      );
+      await generateAndSaveActivityPlan(checkin, student, symptomsThatDay);
+    }
 
     res.json({
       success: true,

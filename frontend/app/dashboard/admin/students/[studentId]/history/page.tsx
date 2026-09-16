@@ -4,6 +4,8 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
 import BackButton from "@/components/BackButton";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { categoryForGrade, gradeSlugForValue } from "@/lib/gradeTaxonomy";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
@@ -176,6 +178,12 @@ export default function AdminStudentHistoryPage({
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Shared date-range filter applied to both the symptom log list and the
+  // emotion check-in list below (they're both scoped to this one student,
+  // so one From/To control covers both).
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   // Flag state
   const [flagged, setFlagged] = useState(false);
@@ -587,6 +595,23 @@ export default function AdminStudentHistoryPage({
     } catch (err) {
       console.error("Failed to delete emotion check-in", err);
     }
+  };
+
+  const filteredSymptomLogs = filterByDateRange(
+    symptomLogs,
+    dateFrom,
+    dateTo,
+    (log) => log.createdAt
+  );
+  const filteredEmotionCheckins = filterByDateRange(
+    emotionCheckins,
+    dateFrom,
+    dateTo,
+    (c) => c.createdAt
+  );
+  const clearDateFilter = () => {
+    setDateFrom("");
+    setDateTo("");
   };
 
   // The history page lives at /dashboard/admin/students/[studentId]/history,
@@ -1043,6 +1068,19 @@ export default function AdminStudentHistoryPage({
             )}
           </div>
 
+        <div className="bg-white rounded-md shadow-sm p-6 mb-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">
+            Filter History
+          </h2>
+          <DateRangeFilter
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            onClear={clearDateFilter}
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Symptom logs */}
           <div className="flex flex-col gap-6">
@@ -1124,12 +1162,14 @@ export default function AdminStudentHistoryPage({
                 Symptom Logs
               </h2>
               <div className="divide-y divide-gray-50 mt-4">
-                {symptomLogs.length === 0 ? (
+                {filteredSymptomLogs.length === 0 ? (
                   <p className="px-6 py-4 text-gray-400 text-sm">
-                    No symptom logs yet.
+                    {symptomLogs.length === 0
+                      ? "No symptom logs yet."
+                      : "No symptom logs in this date range."}
                   </p>
                 ) : (
-                  symptomLogs.map((log) =>
+                  filteredSymptomLogs.map((log) =>
                     editingLogId === log._id ? (
                       <div key={log._id} className="px-6 py-4">
                         <div className="flex flex-col gap-1 mb-3">
@@ -1353,12 +1393,14 @@ export default function AdminStudentHistoryPage({
                 Emotion Check-ins
               </h2>
               <div className="divide-y divide-gray-50 mt-4">
-                {emotionCheckins.length === 0 ? (
+                {filteredEmotionCheckins.length === 0 ? (
                   <p className="px-6 py-4 text-gray-400 text-sm">
-                    No check-ins yet.
+                    {emotionCheckins.length === 0
+                      ? "No check-ins yet."
+                      : "No check-ins in this date range."}
                   </p>
                 ) : (
-                  emotionCheckins.map((c) =>
+                  filteredEmotionCheckins.map((c) =>
                     editingCheckinId === c._id ? (
                       <div key={c._id} className="px-6 py-4">
                         <p className="text-xs text-gray-500 mb-2">Child</p>

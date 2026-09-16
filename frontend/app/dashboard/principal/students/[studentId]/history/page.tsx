@@ -3,6 +3,8 @@
 import { use, useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import BackButton from "@/components/BackButton";
+import DateRangeFilter from "@/components/DateRangeFilter";
+import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
 
 interface SymptomLogEntry {
@@ -60,6 +62,8 @@ export default function PrincipalStudentHistoryPage({
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -87,6 +91,19 @@ export default function PrincipalStudentHistoryPage({
     load();
   }, [studentId]);
 
+  const filteredSymptomLogs = filterByDateRange(
+    symptomLogs,
+    dateFrom,
+    dateTo,
+    (log) => log.createdAt
+  );
+  const filteredEmotionCheckins = filterByDateRange(
+    emotionCheckins,
+    dateFrom,
+    dateTo,
+    (c) => c.createdAt
+  );
+
   return (
     <PrincipalDashboardLayout>
       <BackButton />
@@ -100,6 +117,23 @@ export default function PrincipalStudentHistoryPage({
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
+        <>
+          <div className="bg-white rounded-md shadow-sm p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">
+              Filter History
+            </h2>
+            <DateRangeFilter
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              onClear={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+            />
+          </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-md shadow-sm overflow-hidden">
             <h2 className="text-sm font-semibold text-gray-700 p-6 pb-0">
@@ -120,14 +154,16 @@ export default function PrincipalStudentHistoryPage({
                 </tr>
               </thead>
               <tbody>
-                {symptomLogs.length === 0 ? (
+                {filteredSymptomLogs.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="px-4 py-4 text-gray-400">
-                      No symptom logs yet.
+                      {symptomLogs.length === 0
+                        ? "No symptom logs yet."
+                        : "No symptom logs in this date range."}
                     </td>
                   </tr>
                 ) : (
-                  symptomLogs.map((log) => (
+                  filteredSymptomLogs.map((log) => (
                     <tr key={log._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(log.createdAt).toLocaleString()}
@@ -177,14 +213,16 @@ export default function PrincipalStudentHistoryPage({
                 </tr>
               </thead>
               <tbody>
-                {emotionCheckins.length === 0 ? (
+                {filteredEmotionCheckins.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-4 text-gray-400">
-                      No check-ins yet.
+                      {emotionCheckins.length === 0
+                        ? "No check-ins yet."
+                        : "No check-ins in this date range."}
                     </td>
                   </tr>
                 ) : (
-                  emotionCheckins.map((c) => (
+                  filteredEmotionCheckins.map((c) => (
                     <tr key={c._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(c.createdAt).toLocaleString()}
@@ -218,6 +256,7 @@ export default function PrincipalStudentHistoryPage({
             </table>
           </div>
         </div>
+        </>
       )}
     </PrincipalDashboardLayout>
   );

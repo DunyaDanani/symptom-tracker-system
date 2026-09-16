@@ -50,27 +50,17 @@ export default function FamilyDashboardLayout({
   // with the child dashboard pages; emotion check-ins are recorded by the
   // shadow teacher instead.)
   const navItems = [
-    { label: "Dashboard", href: basePath, icon: DashboardIcon },
-    { label: "Notice", href: `${basePath}/notice`, icon: NoticeIcon },
-    { label: "Messages", href: `${basePath}/messages`, icon: MessagesIcon },
-    { label: "Study Module", href: `${basePath}/study-module`, icon: StudyIcon },
-    {
-      label: "Emotion History",
-      href: `${basePath}/emotion-history`,
-      icon: EmotionIcon,
-    },
-    {
-      label: "Symptom History",
-      href: `${basePath}/symptom-history`,
-      icon: SymptomIcon,
-    },
-    { label: "Reports", href: `${basePath}/reports`, icon: ReportsIcon },
-    {
-      label: "Doctor's Recommendation",
-      href: `${basePath}/doctor-documents`,
-      icon: DoctorIcon,
-    },
-  ];
+  { label: "Dashboard", href: basePath, icon: DashboardIcon },
+  { label: "Notice", href: `${basePath}/notice`, icon: NoticeIcon },
+  { label: "Messages", href: `${basePath}/messages`, icon: MessagesIcon },
+  { label: "Study Module", href: `${basePath}/study-module`, icon: StudyIcon },
+  { label: "Reports", href: `${basePath}/reports`, icon: ReportsIcon },
+  {
+    label: "Doctor's Recommendation",
+    href: `${basePath}/doctor-documents`,
+    icon: DoctorIcon,
+  },
+];
 
   const handleLogout = () => {
     localStorage.removeItem("token");
