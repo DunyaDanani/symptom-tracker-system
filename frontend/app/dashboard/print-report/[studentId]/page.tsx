@@ -6,6 +6,7 @@ import SymptomTrendChart from "@/components/SymptomTrendChart";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
+import BackButton from "@/components/BackButton";
 
 interface StudentProfile {
   _id: string;
@@ -99,7 +100,7 @@ export default function PrintReportPage({
   const [termTerm, setTermTerm] = useState("");
 
   const { terms: academicTerms, academicYears, currentTerm } =
-    useAcademicTerms();
+    useAcademicTerms(studentId);
 
   const selectedTermEntry = academicTerms.find(
     (t) => t.academicYear === termAcademicYear && t.term === termTerm
@@ -225,6 +226,9 @@ export default function PrintReportPage({
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
       {/* Screen-only controls */}
+      <div className="max-w-3xl mx-auto mb-4 print:hidden">
+        <BackButton />
+      </div>
       <div className="max-w-3xl mx-auto flex items-center justify-between mb-6 print:hidden">
         <div className="flex gap-3">
           <button

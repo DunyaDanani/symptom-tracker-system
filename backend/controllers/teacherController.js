@@ -225,15 +225,6 @@ export const logSymptoms = async (req, res) => {
       });
     }
 
-    const matchingTerm = await resolveTermForDate(new Date());
-    if (!matchingTerm) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Today isn't covered by the school's academic calendar yet — ask an admin to configure it under Academic Terms before logging symptoms.",
-      });
-    }
-
     // Confirm this teacher actually has access to this student.
     const student = await Student.findOne(
       studentAccessFilter(req.user, studentId)
@@ -243,6 +234,16 @@ export const logSymptoms = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: accessDeniedMessage(req.user),
+      });
+    }
+
+    // Term comes from the student's own branch + National/Cambridge calendar.
+    const matchingTerm = await resolveTermForDate(new Date(), student);
+    if (!matchingTerm) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Today isn't covered by this student's academic calendar yet — ask an admin to configure it under Academic Terms before logging symptoms.",
       });
     }
 
@@ -443,7 +444,7 @@ export const submitChildEmojiCheckin = async (req, res) => {
     // Left null if today's date doesn't fall inside any configured term —
     // same "don't block the check-in over calendar gaps" behaviour used
     // throughout the rest of this flow.
-    const matchingTerm = await resolveTermForDate(new Date());
+    const matchingTerm = await resolveTermForDate(new Date(), student);
 
     const checkin = await EmotionCheckin.create({
       student: studentId,
@@ -522,7 +523,7 @@ export const submitEmotionCheckin = async (req, res) => {
     // Left null if today's date doesn't fall inside any configured term —
     // same "don't block the check-in over calendar gaps" behaviour as the
     // child's tap.
-    const matchingTerm = await resolveTermForDate(new Date());
+    const matchingTerm = await resolveTermForDate(new Date(), student);
 
     let checkin = checkinId
       ? await EmotionCheckin.findOne({ _id: checkinId, student: studentId })

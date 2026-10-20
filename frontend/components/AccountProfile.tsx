@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  isValidEmail,
+  requiredMessage,
+  errorBorder,
+  INVALID_EMAIL_MESSAGE,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 interface Me {
   _id: string;
@@ -43,6 +52,12 @@ export default function AccountProfile() {
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [emailBusy, setEmailBusy] = useState(false);
 
+  const [fieldErrors, setFieldErrors] = useState<
+    FieldErrors<"newUsername" | "currentPassword" | "newPassword" | "newEmail">
+  >({});
+  const clearFieldError = (field: "newUsername" | "currentPassword" | "newPassword" | "newEmail") =>
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+
   const authHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem("token")}`,
   });
@@ -73,6 +88,10 @@ export default function AccountProfile() {
   const submitUsernameChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setUsernameStatus(null);
+    if (isBlank(newUsername)) {
+      setFieldErrors((prev) => ({ ...prev, newUsername: requiredMessage("New username") }));
+      return;
+    }
     setUsernameBusy(true);
     try {
       const res = await fetch(`${API_BASE}/auth/change-username`, {
@@ -97,6 +116,13 @@ export default function AccountProfile() {
   const submitEmailChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setEmailStatus(null);
+    if (isBlank(newEmail) || !isValidEmail(newEmail)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        newEmail: isBlank(newEmail) ? requiredMessage("Email") : INVALID_EMAIL_MESSAGE,
+      }));
+      return;
+    }
     setEmailBusy(true);
     try {
       const res = await fetch(`${API_BASE}/auth/change-email`, {
@@ -120,6 +146,16 @@ export default function AccountProfile() {
   const submitPasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordStatus(null);
+    const pwErrors: FieldErrors<"currentPassword" | "newPassword"> = {};
+    if (isBlank(currentPassword))
+      pwErrors.currentPassword = requiredMessage("Current password");
+    if (isBlank(newPassword)) pwErrors.newPassword = requiredMessage("New password");
+    setFieldErrors((prev) => ({
+      ...prev,
+      currentPassword: pwErrors.currentPassword,
+      newPassword: pwErrors.newPassword,
+    }));
+    if (Object.keys(pwErrors).length > 0) return;
     setPasswordBusy(true);
     try {
       const res = await fetch(`${API_BASE}/auth/change-password`, {
@@ -195,6 +231,7 @@ export default function AccountProfile() {
       {me.role !== "parent" && me.role !== "child" && (
         <form
           onSubmit={submitEmailChange}
+          noValidate
           className="bg-white rounded-md shadow-sm p-6 space-y-3"
         >
           <p className="text-sm font-semibold text-gray-700">
@@ -208,10 +245,14 @@ export default function AccountProfile() {
           <input
             type="email"
             value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+            onChange={(e) => {
+            setNewEmail(e.target.value);
+            clearFieldError("newEmail");
+          }}
+            className={`w-full border border-gray-200 rounded px-3 py-2 text-sm ${errorBorder(fieldErrors.newEmail)}`}
             placeholder="you@example.com"
           />
+          <FieldError message={fieldErrors.newEmail} />
           <button
             type="submit"
             disabled={emailBusy}
@@ -228,16 +269,21 @@ export default function AccountProfile() {
       {/* Change username */}
       <form
         onSubmit={submitUsernameChange}
+        noValidate
         className="bg-white rounded-md shadow-sm p-6 space-y-3"
       >
         <p className="text-sm font-semibold text-gray-700">Change username</p>
         <input
           type="text"
           value={newUsername}
-          onChange={(e) => setNewUsername(e.target.value)}
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+          onChange={(e) => {
+            setNewUsername(e.target.value);
+            clearFieldError("newUsername");
+          }}
+          className={`w-full border border-gray-200 rounded px-3 py-2 text-sm ${errorBorder(fieldErrors.newUsername)}`}
           placeholder="New username"
         />
+        <FieldError message={fieldErrors.newUsername} />
         <button
           type="submit"
           disabled={usernameBusy}
@@ -253,23 +299,32 @@ export default function AccountProfile() {
       {/* Change password */}
       <form
         onSubmit={submitPasswordChange}
+        noValidate
         className="bg-white rounded-md shadow-sm p-6 space-y-3"
       >
         <p className="text-sm font-semibold text-gray-700">Change password</p>
         <input
           type="password"
           value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+          onChange={(e) => {
+            setCurrentPassword(e.target.value);
+            clearFieldError("currentPassword");
+          }}
+          className={`w-full border border-gray-200 rounded px-3 py-2 text-sm ${errorBorder(fieldErrors.currentPassword)}`}
           placeholder="Current password"
         />
+        <FieldError message={fieldErrors.currentPassword} />
         <input
           type="password"
           value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
+          onChange={(e) => {
+            setNewPassword(e.target.value);
+            clearFieldError("newPassword");
+          }}
+          className={`w-full border border-gray-200 rounded px-3 py-2 text-sm ${errorBorder(fieldErrors.newPassword)}`}
           placeholder="New password"
         />
+        <FieldError message={fieldErrors.newPassword} />
         <button
           type="submit"
           disabled={passwordBusy}

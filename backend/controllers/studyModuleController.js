@@ -185,22 +185,6 @@ export const uploadResource = async (req, res) => {
     // (same helper the emotion check-in and symptom log auto-tagging use).
     // An explicit academicYear/term in the body still wins — used when
     // backfilling a module for an earlier term via the edit panel.
-    let resolvedAcademicYear = academicYear?.trim() || "";
-    let resolvedTerm = TERMS.includes(term) ? term : "";
-
-    if (type === "module" && (!resolvedAcademicYear || !resolvedTerm)) {
-      const matchingTerm = await resolveTermForDate(new Date());
-      if (!matchingTerm) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Today isn't covered by the school's academic calendar yet — ask an admin to configure it under Academic Terms before uploading modules.",
-        });
-      }
-      resolvedAcademicYear = matchingTerm.academicYear;
-      resolvedTerm = matchingTerm.term;
-    }
-
     const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({
@@ -214,6 +198,22 @@ export const uploadResource = async (req, res) => {
         success: false,
         message: "You do not have access to this student",
       });
+    }
+
+    let resolvedAcademicYear = academicYear?.trim() || "";
+    let resolvedTerm = TERMS.includes(term) ? term : "";
+
+    if (type === "module" && (!resolvedAcademicYear || !resolvedTerm)) {
+      const matchingTerm = await resolveTermForDate(new Date(), student);
+      if (!matchingTerm) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Today isn't covered by this student's academic calendar yet — ask an admin to configure it under Academic Terms before uploading modules.",
+        });
+      }
+      resolvedAcademicYear = matchingTerm.academicYear;
+      resolvedTerm = matchingTerm.term;
     }
 
     const resource = await StudyResource.create({

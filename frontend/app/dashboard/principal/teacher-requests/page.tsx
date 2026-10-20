@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
 
 import { API_BASE } from "@/lib/config";
 
@@ -17,19 +16,41 @@ interface TeacherRequest {
   teacher: { _id: string; name: string; username: string } | null;
   requestedBy: { _id: string; name: string } | null;
   note: string;
-  status: "pending" | "approved" | "denied" | "fulfilled";
+  status:
+    | "pending"
+    | "forwarded"
+    | "approved"
+    | "accepted"
+    | "denied"
+    | "declined"
+    | "cancelled"
+    | "fulfilled";
+  principalMessage?: string;
+  declineReason?: string;
+  studentName?: string;
+  studentGrade?: string;
+  studentProgramCategory?: string;
+  studentDiagnosis?: string;
+  studentCommunicationLevel?: string;
   createdAt: string;
   reviewedBy?: { _id: string; name: string } | null;
   reviewedAt?: string | null;
   denialReason?: string;
   currentStudents: CurrentStudent[];
+  previousStudents: CurrentStudent[];
 }
 
-// A shadow teacher is meant to be 1:1 with a single student. This page is
-// where a branch principal reviews admin requests to break that rule for a
-// specific teacher/second-student situation — approve to let the admin go
-// ahead and assign them, or deny to keep the teacher at their current
-// student only. See backend/models/TeacherAssignmentRequest.js.
+const COMMUNICATION_LABEL: Record<string, string> = {
+  "non-verbal": "Non-verbal",
+  "partially-verbal": "Partially verbal",
+  verbal: "Verbal",
+};
+
+// Admin requests to place an existing shadow teacher with a new child
+// joining this branch. The principal either sends the request on to the
+// teacher (with a message, which also lands in the teacher's inbox) or
+// denies it. The teacher then accepts or declines, and only then can the
+// admin assign them. See backend/models/TeacherAssignmentRequest.js.
 export default function PrincipalTeacherRequestsPage() {
   const [requests, setRequests] = useState<TeacherRequest[]>([]);
   const [showAll, setShowAll] = useState(false);
@@ -38,6 +59,9 @@ export default function PrincipalTeacherRequestsPage() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState("");
+  const [forwardingId, setForwardingId] = useState<string | null>(null);
+  const [forwardMessage, setForwardMessage] = useState("");
+  const [forwardError, setForwardError] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -66,18 +90,28 @@ export default function PrincipalTeacherRequestsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll]);
 
-  const review = async (id: string, action: "approve" | "deny", reason?: string) => {
+  const review = async (
+    id: string,
+    action: "forward" | "cancel",
+    extra: { reason?: string; message?: string } = {}
+  ) => {
     setActingId(id);
     setError("");
     const token = localStorage.getItem("token");
+    // Cancelling works at any stage before the teacher is assigned, and
+    // tells the admin (and the teacher, if it had reached them).
+    const url =
+      action === "cancel"
+        ? `${API_BASE}/principal/teacher-requests/${id}/cancel`
+        : `${API_BASE}/principal/teacher-requests/${id}`;
     try {
-      const res = await fetch(`${API_BASE}/principal/teacher-requests/${id}`, {
+      const res = await fetch(url, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action, reason }),
+        body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -85,6 +119,8 @@ export default function PrincipalTeacherRequestsPage() {
       } else {
         setDenyingId(null);
         setDenyReason("");
+        setForwardingId(null);
+        setForwardMessage("");
         await load();
       }
     } catch (err) {
@@ -96,25 +132,29 @@ export default function PrincipalTeacherRequestsPage() {
   };
 
   const statusBadge = (status: TeacherRequest["status"]) => {
-    const styles: Record<TeacherRequest["status"], string> = {
-      pending: "bg-amber-100 text-amber-700",
-      approved: "bg-emerald-100 text-emerald-700",
-      denied: "bg-red-100 text-red-700",
-      fulfilled: "bg-blue-100 text-blue-700",
+    const styles: Record<TeacherRequest["status"], [string, string]> = {
+      pending: ["bg-amber-100 text-amber-700", "Needs your review"],
+      forwarded: ["bg-sky-100 text-sky-700", "Sent to teacher"],
+      approved: ["bg-sky-100 text-sky-700", "Sent to teacher"],
+      accepted: ["bg-emerald-100 text-emerald-700", "Teacher accepted"],
+      denied: ["bg-red-100 text-red-700", "Denied"],
+      declined: ["bg-red-100 text-red-700", "Teacher declined"],
+      cancelled: ["bg-gray-100 text-gray-600", "Cancelled"],
+      fulfilled: ["bg-blue-100 text-blue-700", "Teacher assigned"],
     };
+    const [cls, label] = styles[status];
     return (
-      <span className={`text-xs font-medium px-2.5 py-1 rounded ${styles[status]}`}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <span className={`text-xs font-medium px-2.5 py-1 rounded whitespace-nowrap ${cls}`}>
+        {label}
       </span>
     );
   };
 
   return (
     <PrincipalDashboardLayout>
-      <BackButton />
       <div className="flex items-center justify-between mt-2 mb-1">
         <h1 className="text-2xl font-semibold text-blue-900">
-          Teacher Assignment Requests
+          Shadow Teacher Assignment Requests
         </h1>
         <button
           onClick={() => setShowAll((v) => !v)}
@@ -124,9 +164,9 @@ export default function PrincipalTeacherRequestsPage() {
         </button>
       </div>
       <p className="text-sm text-gray-500 mb-8">
-        Shadow teachers are meant to be assigned to one student at a time.
-        These are admin requests to assign an already-assigned teacher to a
-        second student in your branch.
+        Admin requests to place an existing shadow teacher with a new child
+        joining your branch. Send a request on to the teacher with a
+        message, or deny it. The teacher then accepts or declines.
       </p>
 
       {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
@@ -157,10 +197,45 @@ export default function PrincipalTeacherRequestsPage() {
                 {statusBadge(r.status)}
               </div>
 
-              {r.currentStudents.length > 0 && (
+              {r.studentName && (
+                <div className="mt-3 bg-slate-50 border border-slate-100 rounded p-3 text-xs text-gray-700 space-y-1">
+                  <p>
+                    <span className="text-gray-500">Student:</span>{" "}
+                    <span className="font-medium">{r.studentName}</span>
+                    {r.studentGrade ? ` · ${r.studentGrade}` : ""}
+                    {r.studentProgramCategory
+                      ? ` (${r.studentProgramCategory === "cambridge" ? "Cambridge" : "National"})`
+                      : ""}
+                  </p>
+                  {r.studentDiagnosis && (
+                    <p>
+                      <span className="text-gray-500">Condition:</span>{" "}
+                      {r.studentDiagnosis}
+                    </p>
+                  )}
+                  {r.studentCommunicationLevel && (
+                    <p>
+                      <span className="text-gray-500">Communication:</span>{" "}
+                      {COMMUNICATION_LABEL[r.studentCommunicationLevel] ||
+                        r.studentCommunicationLevel}
+                    </p>
+                  )}
+                </div>
+              )}
+              {r.currentStudents.length > 0 ? (
                 <p className="text-xs text-gray-600 mt-3">
                   Currently assigned to:{" "}
-                  {r.currentStudents.map((s) => s.name).join(", ")}
+                  {r.currentStudents.map((s) => `${s.name} (${s.branch})`).join(", ")}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-600 mt-3">
+                  No student at the moment.
+                </p>
+              )}
+              {r.previousStudents.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Previously with:{" "}
+                  {r.previousStudents.map((s) => `${s.name} (${s.branch})`).join(", ")}
                 </p>
               )}
 
@@ -170,28 +245,81 @@ export default function PrincipalTeacherRequestsPage() {
                 </p>
               )}
 
-              {r.status === "denied" && r.denialReason && (
+              {(r.status === "denied" || r.status === "cancelled") && r.denialReason && (
                 <p className="text-xs text-red-500 mt-2">
                   Reason: {r.denialReason}
                 </p>
               )}
+              {r.principalMessage && r.status !== "pending" && (
+                <p className="text-xs text-gray-600 mt-2">
+                  Your message to the teacher: &ldquo;{r.principalMessage}&rdquo;
+                </p>
+              )}
+              {r.status === "declined" && r.declineReason && (
+                <p className="text-xs text-red-500 mt-2">
+                  Teacher&apos;s reason: {r.declineReason}
+                </p>
+              )}
 
-              {r.status === "pending" && (
+              {["pending", "forwarded", "approved", "accepted"].includes(r.status) && (
                 <div className="mt-4">
-                  {denyingId === r._id ? (
+                  {forwardingId === r._id ? (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-gray-500">
+                        Message to {r.teacher?.name || "the teacher"}
+                      </label>
+                      <textarea
+                        rows={3}
+                        className={`w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-blue-400 ${forwardError ? "border-red-400!" : ""}`}
+                        value={forwardMessage}
+                        onChange={(e) => {
+                          setForwardMessage(e.target.value);
+                          setForwardError("");
+                        }}
+                      />
+                      {forwardError && (
+                        <p className="text-xs text-red-500">{forwardError}</p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            if (!forwardMessage.trim()) {
+                              setForwardError("Message is required");
+                              return;
+                            }
+                            review(r._id, "forward", { message: forwardMessage });
+                          }}
+                          disabled={actingId === r._id}
+                          className="text-xs font-medium px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60"
+                        >
+                          {actingId === r._id ? "Sending..." : "Send to teacher"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setForwardingId(null);
+                            setForwardMessage("");
+                            setForwardError("");
+                          }}
+                          className="text-xs text-gray-500 hover:underline"
+                        >
+                          Back
+                        </button>
+                      </div>
+                    </div>
+                  ) : denyingId === r._id ? (
                     <div className="flex items-center gap-2">
                       <input
-                        className="input flex-1 text-sm"
-                        placeholder="Reason (optional)"
+                        className="flex-1 min-w-0 text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-blue-400"
+                        placeholder="Reason for cancelling (optional)"
                         value={denyReason}
                         onChange={(e) => setDenyReason(e.target.value)}
                       />
                       <button
-                        onClick={() => review(r._id, "deny", denyReason)}
+                        onClick={() => review(r._id, "cancel", { reason: denyReason })}
                         disabled={actingId === r._id}
-                        className="text-xs font-medium px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white disabled:opacity-60"
+                        className="text-xs font-medium px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white disabled:opacity-60 whitespace-nowrap"
                       >
-                        Confirm deny
+                        Confirm cancel
                       </button>
                       <button
                         onClick={() => {
@@ -200,24 +328,36 @@ export default function PrincipalTeacherRequestsPage() {
                         }}
                         className="text-xs text-gray-500 hover:underline"
                       >
-                        Cancel
+                        Back
                       </button>
                     </div>
                   ) : (
                     <div className="flex gap-2">
+                      {r.status === "pending" && (
                       <button
-                        onClick={() => review(r._id, "approve")}
+                        onClick={() => {
+                          setDenyingId(null);
+                          setForwardingId(r._id);
+                          setForwardError("");
+                          setForwardMessage(
+                            `Hello ${r.teacher?.name || ""}, we have a child${r.studentName ? `, ${r.studentName},` : ""} joining our branch and would like you to be their shadow teacher. Please let us know if you can take this on.`
+                          );
+                        }}
                         disabled={actingId === r._id}
                         className="text-xs font-medium px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60"
                       >
-                        Approve
+                        Send to teacher
                       </button>
+                      )}
                       <button
-                        onClick={() => setDenyingId(r._id)}
+                        onClick={() => {
+                          setForwardingId(null);
+                          setDenyingId(r._id);
+                        }}
                         disabled={actingId === r._id}
-                        className="text-xs font-medium px-4 py-2 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                        className="text-xs font-medium px-4 py-2 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
                       >
-                        Deny
+                        Cancel request
                       </button>
                     </div>
                   )}

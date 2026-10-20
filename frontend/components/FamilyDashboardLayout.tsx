@@ -56,6 +56,11 @@ export default function FamilyDashboardLayout({
   { label: "Study Module", href: `${basePath}/study-module`, icon: StudyIcon },
   { label: "Reports", href: `${basePath}/reports`, icon: ReportsIcon },
   {
+    label: "Break Time Activities",
+    href: `${basePath}/break-activities`,
+    icon: BreakTimeIcon,
+  },
+  {
     label: "Doctor's Recommendation",
     href: `${basePath}/doctor-documents`,
     icon: DoctorIcon,

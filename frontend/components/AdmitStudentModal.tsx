@@ -20,8 +20,28 @@ interface Teacher {
   specialization: string;
   experienceYears: number;
   isAssigned: boolean;
-  myRequestStatus: "pending" | "approved" | "denied" | null;
-  myRequestId: string | null;
+  currentStudents: { _id: string; name: string; branch: string }[];
+  previousStudents: { _id: string; name: string; branch: string }[];
+  lastBranch: string | null;
+  // The teacher's in-progress request (only one allowed per teacher), or
+  // their most recent finished one. See TeacherAssignmentRequest.
+  request: {
+    _id: string;
+    status:
+      | "pending"
+      | "forwarded"
+      | "approved"
+      | "accepted"
+      | "denied"
+      | "declined"
+      | "cancelled";
+    branch: string;
+    isOpen: boolean;
+    requestedBy: string | null;
+    studentName?: string;
+    denialReason?: string;
+    declineReason?: string;
+  } | null;
 }
 
 interface Credentials {
@@ -66,6 +86,10 @@ const blankForm = () => ({
   parentPhone: "",
   homeCity: "",
   assignedTeacherId: "",
+  // An existing teacher to request for this child once they're admitted
+  // (admin -> branch principal -> teacher). Not assigned until the teacher
+  // accepts.
+  requestTeacherId: "",
   newTeacher: {
     title: "",
     name: "",
@@ -98,6 +122,10 @@ export default function AdmitStudentModal({
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials>({});
   const [emailSent, setEmailSent] = useState(false);
+  const [teacherRequestResult, setTeacherRequestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
   // Teacher list + search
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -168,17 +196,53 @@ export default function AdmitStudentModal({
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({}),
+          // The child's details go with the request so the principal and
+          // teacher know who they'd be taking on and the child's condition.
+          body: JSON.stringify({
+            branch: form.branch,
+            student: {
+              fullName: form.fullName,
+              grade: form.grade,
+              programCategory: form.programCategory,
+              diagnosis: form.diagnosis,
+              communicationLevel: form.communicationLevel,
+            },
+          }),
         }
       );
       const data = await res.json();
       if (!data.success) {
         setRequestError(data.message || "Failed to send request");
-      } else {
-        await fetchTeachers();
       }
+      await fetchTeachers();
     } catch (err) {
       console.error("Failed to request teacher assignment", err);
+      setRequestError("Unable to reach the server");
+    } finally {
+      setRequestingTeacherId(null);
+    }
+  };
+
+  // Withdraws an in-progress request (at any stage before the teacher is
+  // actually assigned). The principal — and the teacher, if it had reached
+  // them — get a message saying it was cancelled.
+  const cancelTeacherRequest = async (teacherId: string, requestId: string) => {
+    setRequestingTeacherId(teacherId);
+    setRequestError("");
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(
+        `${API_BASE}/students/teacher-requests/${requestId}/cancel`,
+        { method: "PATCH", headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      if (!data.success) setRequestError(data.message || "Failed to cancel request");
+      if (form.assignedTeacherId === teacherId) {
+        setForm((prev) => ({ ...prev, assignedTeacherId: "" }));
+      }
+      await fetchTeachers();
+    } catch (err) {
+      console.error("Failed to cancel teacher request", err);
       setRequestError("Unable to reach the server");
     } finally {
       setRequestingTeacherId(null);
@@ -268,10 +332,22 @@ export default function AdmitStudentModal({
     setStep((s) => Math.max(s - 1, 1));
   };
 
+  // Picks (or un-picks) an existing teacher to request after admission.
+  const toggleRequestTeacher = (id: string) => {
+    setShowAddTeacher(false);
+    setForm((prev) => ({
+      ...prev,
+      requestTeacherId: prev.requestTeacherId === id ? "" : id,
+      assignedTeacherId: "",
+      newTeacher: blankForm().newTeacher,
+    }));
+  };
+
   const handleSelectTeacher = (id: string) => {
     setForm((prev) => ({
       ...prev,
       assignedTeacherId: id,
+      requestTeacherId: "",
       newTeacher: {
         title: "",
         name: "",
@@ -383,6 +459,38 @@ export default function AdmitStudentModal({
 
       setCredentials(data.credentials);
       setEmailSent(Boolean(data.emailSent));
+
+      // Student is admitted — now send the teacher request for them. It
+      // goes to this branch's principal, who passes it on to the teacher.
+      if (form.requestTeacherId && data.student?._id) {
+        try {
+          const reqRes = await fetch(
+            `${API_BASE}/students/teachers/${form.requestTeacherId}/request-assignment`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ studentId: data.student._id }),
+            }
+          );
+          const reqData = await reqRes.json();
+          setTeacherRequestResult({
+            ok: Boolean(reqData.success),
+            message: reqData.success
+              ? `Shadow teacher request sent to the ${form.branch} branch principal. The teacher will be assigned once they accept.`
+              : `The student was admitted, but the teacher request failed: ${reqData.message || "unknown error"}. You can request a teacher from the student's profile.`,
+          });
+        } catch {
+          setTeacherRequestResult({
+            ok: false,
+            message:
+              "The student was admitted, but the teacher request couldn't be sent. You can request a teacher from the student's profile.",
+          });
+        }
+      }
+
       setSuccess(true);
       onAdmitted?.();
     } catch (err) {
@@ -396,6 +504,7 @@ export default function AdmitStudentModal({
     setForm({ ...blankForm(), branch: branches[0] || "" });
     setCredentials({});
     setEmailSent(false);
+    setTeacherRequestResult(null);
     setSuccess(false);
     setFieldErrors({});
     setError("");
@@ -415,6 +524,7 @@ export default function AdmitStudentModal({
   );
 
   const selectedTeacher = teachers.find((t) => t._id === form.assignedTeacherId);
+  const requestedTeacher = teachers.find((t) => t._id === form.requestTeacherId);
 
   const gradeOptions = getGradesForCategory(form.categorySlug, form.programCategory);
 
@@ -434,6 +544,17 @@ export default function AdmitStudentModal({
               : `Could not email credentials to ${form.parentEmail} — please share the credentials below with the parent directly.`}
             {selectedTeacher ? ` Shadow teacher ${selectedTeacher.name} assigned.` : ""}
           </div>
+          {teacherRequestResult && (
+            <div
+              className={`text-sm rounded p-4 mb-6 border ${
+                teacherRequestResult.ok
+                  ? "bg-sky-50 border-sky-200 text-sky-800"
+                  : "bg-amber-50 border-amber-200 text-amber-800"
+              }`}
+            >
+              {teacherRequestResult.message}
+            </div>
+          )}
           {!emailSent && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded p-3 mb-6">
               Email delivery failed or is not configured. The account was
@@ -804,7 +925,7 @@ export default function AdmitStudentModal({
             <div>
               <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-4">
                 <h3 className="font-semibold text-gray-700">
-                  Available Shadow teacher
+                  Shadow teacher
                 </h3>
                 <button
                   type="button"
@@ -822,6 +943,15 @@ export default function AdmitStudentModal({
                 onChange={(e) => setTeacherSearch(e.target.value)}
               />
 
+              <p className="text-xs text-gray-500 mb-3">
+                Choose a teacher already in the system to request, or add a
+                new one below. A request is sent after the student is
+                admitted: it goes to the {form.branch} principal, who sends
+                it to the teacher, and the teacher is assigned once they
+                accept. You can also skip this and request a teacher later
+                from the student&apos;s profile.
+              </p>
+
               {requestError && (
                 <p className="text-xs text-red-500 mb-3">{requestError}</p>
               )}
@@ -834,67 +964,100 @@ export default function AdmitStudentModal({
                 )}
                 {filteredTeachers.map((t) => {
                   const isSelected = form.assignedTeacherId === t._id;
-                  // A teacher already assigned to a student is only
-                  // selectable if this admin has a still-unused approval
-                  // for them (see TeacherAssignmentRequest) — otherwise
-                  // they need the branch principal's sign-off first.
-                  const canSelect = !t.isAssigned || t.myRequestStatus === "approved";
-                  const isRequesting = requestingTeacherId === t._id;
+                  const willRequest = form.requestTeacherId === t._id;
+                  const isBusy = requestingTeacherId === t._id;
+                  const req = t.request;
+                  const openReq = req && req.isOpen ? req : null;
+                  // Older accepted requests that aren't tied to a student
+                  // can still be used directly.
+                  const legacyAccepted =
+                    openReq?.status === "accepted" && openReq.branch === form.branch;
+
+                  let stageLabel = "";
+                  if (openReq) {
+                    stageLabel =
+                      openReq.status === "pending"
+                        ? "Waiting for principal"
+                        : openReq.status === "accepted"
+                        ? `Accepted for ${openReq.branch}`
+                        : "Waiting for teacher";
+                  }
 
                   return (
-                    <div
-                      key={t._id}
-                      className="flex items-center justify-between border border-gray-200 rounded p-3"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-800 text-sm">
-                          {t.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {t.specialization || "General"} ·{" "}
-                          {t.experienceYears} years experience
-                        </p>
-                        {t.isAssigned && (
-                          <p className="text-xs text-amber-600 mt-0.5">
-                            Already has a student assigned
+                    <div key={t._id} className="border border-gray-200 rounded p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-800 text-sm">{t.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {t.specialization || "General"} · {t.experienceYears} years experience
                           </p>
-                        )}
-                      </div>
+                          {t.currentStudents.length > 0 ? (
+                            <p className="text-xs text-amber-600 mt-0.5">
+                              Currently with {t.currentStudents.map((c) => c.name).join(", ")}
+                            </p>
+                          ) : t.lastBranch ? (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              No student now · last worked in {t.lastBranch}
+                            </p>
+                          ) : null}
+                        </div>
 
-                      {canSelect ? (
-                        <button
-                          onClick={() => handleSelectTeacher(t._id)}
-                          className={`text-xs font-medium px-4 py-1.5 rounded ${
-                            isSelected
-                              ? "bg-blue-600 text-white"
-                              : t.isAssigned
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                              : "bg-sky-100 text-sky-700 hover:bg-sky-200"
-                          }`}
-                        >
-                          {isSelected
-                            ? "Selected"
-                            : t.isAssigned
-                            ? "Approved — select"
-                            : "Available"}
-                        </button>
-                      ) : t.myRequestStatus === "pending" ? (
-                        <span className="text-xs font-medium px-4 py-1.5 rounded bg-amber-100 text-amber-700">
-                          Pending approval
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => requestTeacherAssignment(t._id)}
-                          disabled={isRequesting}
-                          title="This teacher already has a student — ask the branch principal for permission to assign a second one"
-                          className="text-xs font-medium px-4 py-1.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-60"
-                        >
-                          {isRequesting
-                            ? "Sending..."
-                            : t.myRequestStatus === "denied"
-                            ? "Denied — request again"
-                            : "Request permission"}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {legacyAccepted ? (
+                            <button
+                              onClick={() => handleSelectTeacher(t._id)}
+                              className={`text-xs font-medium px-4 py-1.5 rounded ${
+                                isSelected
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              }`}
+                            >
+                              {isSelected ? "Selected" : "Accepted — select"}
+                            </button>
+                          ) : openReq ? (
+                            <span className="text-xs font-medium px-3 py-1.5 rounded bg-amber-100 text-amber-700 whitespace-nowrap">
+                              {stageLabel}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => toggleRequestTeacher(t._id)}
+                              className={`text-xs font-medium px-4 py-1.5 rounded ${
+                                willRequest
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              }`}
+                            >
+                              {willRequest ? "✓ Will request" : "Request teacher"}
+                            </button>
+                          )}
+                          {openReq && (
+                            <button
+                              onClick={() => cancelTeacherRequest(t._id, openReq._id)}
+                              disabled={isBusy}
+                              className="text-xs text-red-500 hover:underline disabled:opacity-60 whitespace-nowrap"
+                            >
+                              {isBusy ? "..." : "Cancel request"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {openReq && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Already requested
+                          {req?.studentName ? ` for ${req.studentName}` : ""}{" "}
+                          — cancel that request to use this teacher for this child.
+                        </p>
+                      )}
+                      {!openReq && req?.status === "denied" && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Last request denied{req.denialReason ? `: ${req.denialReason}` : ""}
+                        </p>
+                      )}
+                      {!openReq && req?.status === "declined" && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Teacher declined the last request
+                          {req.declineReason ? `: ${req.declineReason}` : ""}
+                        </p>
                       )}
                     </div>
                   );
@@ -904,6 +1067,7 @@ export default function AdmitStudentModal({
               <button
                 onClick={() => {
                   setShowAddTeacher((v) => !v);
+                  setForm((prev) => ({ ...prev, requestTeacherId: "" }));
                   setFieldErrors((prev) => {
                     const { newTeacherName, newTeacherEmail, ...rest } = prev;
                     return rest;
@@ -1081,6 +1245,15 @@ export default function AdmitStudentModal({
                     label="Qualification"
                     value={selectedTeacher.qualification || "—"}
                   />
+                </>
+              ) : requestedTeacher ? (
+                <>
+                  <SummaryRow label="Teacher (to request)" value={requestedTeacher.name} />
+                  <p className="text-xs text-gray-500 mt-2">
+                    After you confirm, the request goes to the {form.branch}{" "}
+                    principal, who sends it to the teacher. They&apos;re assigned
+                    once they accept.
+                  </p>
                 </>
               ) : form.newTeacher.name ? (
                 <>

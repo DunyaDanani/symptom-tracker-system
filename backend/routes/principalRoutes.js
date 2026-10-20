@@ -10,6 +10,7 @@ import {
   listTeacherAssignmentRequestsForPrincipal,
   getPendingTeacherAssignmentRequestCount,
   reviewTeacherAssignmentRequest,
+  cancelTeacherAssignmentRequestAsPrincipal,
 } from "../controllers/teacherAssignmentRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -39,6 +40,7 @@ router.get("/teachers/:teacherId", getTeacherProfile);
 
 router.get("/teacher-requests/pending-count", getPendingTeacherAssignmentRequestCount);
 router.get("/teacher-requests", listTeacherAssignmentRequestsForPrincipal);
+router.patch("/teacher-requests/:id/cancel", cancelTeacherAssignmentRequestAsPrincipal);
 router.patch("/teacher-requests/:id", reviewTeacherAssignmentRequest);
 
 export default router;

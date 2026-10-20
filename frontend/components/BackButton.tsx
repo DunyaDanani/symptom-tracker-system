@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 
 // Universal "back" control — uses browser history instead of a hardcoded
@@ -12,12 +13,18 @@ import { useRouter, usePathname } from "next/navigation";
 // rather than competing with the page's primary action button. Callers
 // are expected to place it inline with the page title/header row instead
 // of floating alone above the content.
+//
+// Pass `href` for a fixed destination instead of history (e.g. "Back to
+// Sign-In" on the account-recovery pages) — same look either way, so every
+// back control in the system is the same chevron + label link.
 export default function BackButton({
   label = "Back",
   className = "",
+  href,
 }: {
   label?: string;
   className?: string;
+  href?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -39,15 +46,9 @@ export default function BackButton({
     router.push(fallback);
   };
 
-  return (
-    <button
-      type="button"
-      onClick={handleBack}
-      aria-label={label || "Go back"}
-      title={label || "Go back"}
-      className={`inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-blue-700 transition-colors ${className}`}
-    >
-      <svg
+  const classes = `inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-blue-700 transition-colors ${className}`;
+  const icon = (
+    <svg
         viewBox="0 0 20 20"
         fill="currentColor"
         className="w-4 h-4 shrink-0"
@@ -59,6 +60,26 @@ export default function BackButton({
           clipRule="evenodd"
         />
       </svg>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={classes}>
+        {icon}
+        {label}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleBack}
+      aria-label={label || "Go back"}
+      title={label || "Go back"}
+      className={classes}
+    >
+      {icon}
       {label}
     </button>
   );

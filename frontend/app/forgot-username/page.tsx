@@ -2,19 +2,37 @@
 
 import { useState } from "react";
 import AuthCard from "@/components/AuthCard";
+import BackButton from "@/components/BackButton";
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  isValidEmail,
+  INVALID_EMAIL_MESSAGE,
+  requiredMessage,
+  errorRing,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 export default function ForgotUsernamePage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<"email">>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
     setMessage("");
+
+    const errors: FieldErrors<"email"> = {};
+    if (isBlank(email)) errors.email = requiredMessage("Email");
+    else if (!isValidEmail(email)) errors.email = INVALID_EMAIL_MESSAGE;
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setLoading(true);
 
     try {
       const res = await fetch(`${API_BASE}/auth/forgot-username`, {
@@ -56,20 +74,25 @@ export default function ForgotUsernamePage() {
         </div>
       }
       right={
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center bg-slate-100 rounded-sm px-3 py-3">
-            <svg className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M2.94 6.94a2 2 0 012.12-.45L10 9.28l4.94-2.79a2 2 0 012.12.45 2 2 0 01.45 2.12L17 10.7V14a2 2 0 01-2 2H5a2 2 0 01-2-2v-3.3l-.5-1.64a2 2 0 01.45-2.12z" />
-              <path d="M18 8.12l-8 4.5-8-4.5V6a2 2 0 012-2h12a2 2 0 012 2v2.12z" />
-            </svg>
-            <input
-              type="email"
-              placeholder="Enter Valid Email Address"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="bg-transparent outline-none w-full text-sm text-gray-700 placeholder-gray-400"
-            />
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <div>
+            <div className={`flex items-center bg-slate-100 rounded-sm px-3 py-3 ${errorRing(fieldErrors.email)}`}>
+              <svg className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2.94 6.94a2 2 0 012.12-.45L10 9.28l4.94-2.79a2 2 0 012.12.45 2 2 0 01.45 2.12L17 10.7V14a2 2 0 01-2 2H5a2 2 0 01-2-2v-3.3l-.5-1.64a2 2 0 01.45-2.12z" />
+                <path d="M18 8.12l-8 4.5-8-4.5V6a2 2 0 012-2h12a2 2 0 012 2v2.12z" />
+              </svg>
+              <input
+                type="email"
+                placeholder="Enter Valid Email Address"
+                value={email}
+                onChange={(e) => {
+                setEmail(e.target.value);
+                setFieldErrors({});
+              }}
+                className="bg-transparent outline-none w-full text-sm text-gray-700 placeholder-gray-400"
+              />
+            </div>
+            <FieldError message={fieldErrors.email} />
           </div>
 
           {message && <p className="text-sm text-emerald-600 text-center">{message}</p>}
@@ -83,10 +106,8 @@ export default function ForgotUsernamePage() {
             {loading ? "SENDING..." : "SUBMIT"}
           </button>
 
-          <p className="text-center text-sm">
-            <a href="/login" className="text-blue-500 hover:underline">
-              Back to Sign-In Page
-            </a>
+          <p className="text-center">
+            <BackButton href="/login" label="Back to Sign-In" />
           </p>
         </form>
       }

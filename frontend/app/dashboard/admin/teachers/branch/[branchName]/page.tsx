@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 
 import { API_BASE } from "@/lib/config";
 interface AssignedTeacher {
@@ -16,6 +15,10 @@ interface Student {
   _id: string;
   branch: string;
   assignedTeacher?: AssignedTeacher | null;
+  teacherHistory?: {
+    teacher: AssignedTeacher | null;
+    removedAt?: string | null;
+  }[];
 }
 
 export default function AdminTeacherBranchPage({
@@ -56,26 +59,33 @@ export default function AdminTeacherBranchPage({
     load();
   }, [branch]);
 
+  // Current teachers in this branch, plus teachers who used to have a
+  // student here — their details stay on file after the student is moved
+  // away, so they can be requested again for a new child.
   const teacherMap = new Map<
     string,
-    { teacher: AssignedTeacher; count: number }
+    { teacher: AssignedTeacher; count: number; previous: number }
   >();
+  const entryFor = (t: AssignedTeacher) => {
+    let entry = teacherMap.get(t._id);
+    if (!entry) {
+      entry = { teacher: t, count: 0, previous: 0 };
+      teacherMap.set(t._id, entry);
+    }
+    return entry;
+  };
   students.forEach((s) => {
-    if (!s.assignedTeacher) return;
-    const existing = teacherMap.get(s.assignedTeacher._id);
-    if (existing) existing.count += 1;
-    else
-      teacherMap.set(s.assignedTeacher._id, {
-        teacher: s.assignedTeacher,
-        count: 1,
-      });
+    if (s.assignedTeacher) entryFor(s.assignedTeacher).count += 1;
+    (s.teacherHistory || []).forEach((h) => {
+      if (h.removedAt && h.teacher) entryFor(h.teacher).previous += 1;
+    });
   });
-  const teachers = Array.from(teacherMap.values());
+  const teachers = Array.from(teacherMap.values()).sort(
+    (a, b) => b.count - a.count || a.teacher.name.localeCompare(b.teacher.name)
+  );
 
   return (
     <DashboardLayout>
-      <BackButton />
-
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         {branch}
       </h1>
@@ -111,13 +121,20 @@ export default function AdminTeacherBranchPage({
               </tr>
             </thead>
             <tbody>
-              {teachers.map(({ teacher, count }) => (
+              {teachers.map(({ teacher, count, previous }) => (
                 <tr key={teacher._id} className="border-b border-gray-50">
                   <td className="px-6 py-3">{teacher.name}</td>
                   <td className="px-6 py-3 text-gray-500">
                     {teacher.username}
                   </td>
-                  <td className="px-6 py-3">{count}</td>
+                  <td className="px-6 py-3">
+                    {count}
+                    {count === 0 && previous > 0 && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        Previously assigned here
+                      </span>
+                    )}
+                  </td>
                   <td className="px-6 py-3">
                     <Link
                       href={`/dashboard/admin/teachers/branch/${encodeURIComponent(

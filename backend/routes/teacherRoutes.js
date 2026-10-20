@@ -18,6 +18,11 @@ import {
   logBreakActivity,
   getBreakActivityHistory,
 } from "../controllers/teacherController.js";
+import {
+  listMyAssignmentRequestsAsTeacher,
+  getMyPendingAssignmentRequestCount,
+  respondToAssignmentRequest,
+} from "../controllers/teacherAssignmentRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -45,6 +50,12 @@ router.use((req, res, next) => {
 });
 
 router.get("/profile", getMyTeacherProfile);
+
+// Requests to take on a new child, forwarded by a branch principal.
+const shadowOnly = authorizeRoles("shadow_teacher");
+router.get("/assignment-requests/pending-count", shadowOnly, getMyPendingAssignmentRequestCount);
+router.get("/assignment-requests", shadowOnly, listMyAssignmentRequestsAsTeacher);
+router.patch("/assignment-requests/:id", shadowOnly, respondToAssignmentRequest);
 router.get("/students", getMyStudents);
 router.get("/symptom-options", getSymptomOptions);
 router.get("/students/:studentId/today", getStudentToday);

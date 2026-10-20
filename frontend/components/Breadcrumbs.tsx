@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment } from "react";
+import BackButton from "./BackButton";
 
 interface BreadcrumbsProps {
   /**
@@ -55,11 +56,12 @@ const SEGMENT_LABELS: Record<string, string> = {
   "upload-modules": "Upload Modules",
   "emotion-history": "Emotion History",
   "symptom-history": "Symptom History",
-  "break-activities": "Break Activities",
+  "break-activities": "Break Time Activities",
   "study-module": "Study Module",
   "activity-plan": "My Activities",
   "emotion-checkin": "Emotion Check-in",
-  "teacher-requests": "Teacher Requests",
+  "teacher-requests": "Shadow Teacher Assignment Requests",
+  "assignment-requests": "Shadow Teacher Assignment Requests",
 };
 
 // Full-path overrides for spots where a segment means something different
@@ -126,10 +128,16 @@ export default function Breadcrumbs({ labels, className, middleCrumbs }: Breadcr
   if (crumbs.length <= 1) return null;
 
   return (
+    // The Back control lives here, in the same row as the trail, so every
+    // sub-page in every role gets it in exactly the same spot (pages no
+    // longer place their own). Dashboard home pages have no trail and so
+    // no Back.
     <nav
       aria-label="Breadcrumb"
       className={`mb-6 flex items-center flex-wrap gap-1.5 text-sm text-gray-500 ${className ?? ""}`}
     >
+      <BackButton />
+      <span className="mx-2 h-4 w-px bg-gray-300" aria-hidden="true" />
       {crumbs.map((crumb, index) => {
         const isLast = index === crumbs.length - 1;
         return (

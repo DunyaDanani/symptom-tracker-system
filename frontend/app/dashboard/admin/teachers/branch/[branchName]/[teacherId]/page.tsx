@@ -3,9 +3,10 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 
 import { API_BASE } from "@/lib/config";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import ProfileDetailsModal from "@/components/ProfileDetailsModal";
 interface TeacherProfileData {
   _id: string;
   name: string;
@@ -26,6 +27,11 @@ interface Student {
   section?: string;
   branch: string;
   assignedTeacher?: { _id: string } | null;
+  teacherHistory?: {
+    teacher: { _id: string } | null;
+    assignedAt?: string;
+    removedAt?: string | null;
+  }[];
 }
 
 export default function AdminTeacherProfilePage({
@@ -38,6 +44,7 @@ export default function AdminTeacherProfilePage({
 
   const [teacher, setTeacher] = useState<TeacherProfileData | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [previousStudents, setPreviousStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -52,6 +59,7 @@ export default function AdminTeacherProfilePage({
   const [editNic, setEditNic] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -95,6 +103,15 @@ export default function AdminTeacherProfilePage({
             studentsData.students.filter(
               (s: Student) =>
                 s.branch === branch && s.assignedTeacher?._id === teacherId
+            )
+          );
+          setPreviousStudents(
+            studentsData.students.filter(
+              (s: Student) =>
+                s.branch === branch &&
+                (s.teacherHistory || []).some(
+                  (h) => h.removedAt && h.teacher?._id === teacherId
+                )
             )
           );
         }
@@ -151,34 +168,79 @@ export default function AdminTeacherProfilePage({
     <DashboardLayout
       breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
     >
-      <BackButton />
-
       {loading ? (
         <p className="text-gray-400 text-sm mt-2">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : teacher ? (
         <>
-          <div className="flex items-start justify-between mb-1">
-            <h1 className="text-2xl font-semibold text-blue-900 mt-2">
-              {teacher.name}
-            </h1>
-            {!editing && (
-              <button
-                onClick={() => setEditing(true)}
-                className="mt-2 border border-gray-300 text-gray-600 text-sm px-4 py-2 rounded hover:bg-gray-50"
-              >
-                Edit profile
-              </button>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mb-8">
-            Shadow Teacher · {branch}
-          </p>
+          <ProfileBanner
+            className="mt-2 mb-6"
+            name={teacher.name}
+            lines={[
+              { label: "Role", value: `Shadow Teacher · ${branch}` },
+              { label: "Username", value: teacher.username },
+              { label: "Specialization", value: teacher.specialization },
+              {
+                label: "Experience",
+                value: `${teacher.experienceYears || 0} years`,
+              },
+              {
+                label: "Students",
+                value: `${students.length} current${
+                  previousStudents.length ? ` · ${previousStudents.length} previous` : ""
+                }`,
+              },
+            ]}
+            actions={
+              !editing ? (
+                <>
+                  <button
+                    onClick={() => setShowProfile(true)}
+                    className={BANNER_ACTION_CLASSES}
+                  >
+                    View Profile
+                  </button>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className={BANNER_ACTION_CLASSES}
+                  >
+                    Edit profile
+                  </button>
+                </>
+              ) : null
+            }
+          />
 
+          <ProfileDetailsModal
+            open={showProfile}
+            onClose={() => setShowProfile(false)}
+            title="Shadow Teacher Profile"
+            sections={[
+              {
+                rows: [
+                  { label: "Name", value: teacher.name, wide: true },
+                  { label: "Username", value: teacher.username },
+                  { label: "Branch", value: branch },
+                  { label: "Email", value: teacher.email },
+                  { label: "Phone", value: teacher.phone },
+                  { label: "NIC", value: teacher.nic },
+                  { label: "Age", value: teacher.age },
+                  { label: "Qualification", value: teacher.qualification },
+                  { label: "Specialization", value: teacher.specialization },
+                  {
+                    label: "Experience",
+                    value: `${teacher.experienceYears || 0} years`,
+                  },
+                ],
+              },
+            ]}
+          />
+
+          {editing && (
           <div className="bg-white rounded-md shadow-sm p-6 mb-6">
             <h2 className="text-sm font-semibold text-gray-800 mb-4">
-              Profile
+              Edit Profile
             </h2>
 
             {editing ? (
@@ -286,31 +348,9 @@ export default function AdminTeacherProfilePage({
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <ProfileRow label="Username" value={teacher.username} />
-                <ProfileRow label="Email" value={teacher.email || "—"} />
-                <ProfileRow label="Phone" value={teacher.phone || "—"} />
-                <ProfileRow label="NIC" value={teacher.nic || "—"} />
-                <ProfileRow
-                  label="Age"
-                  value={teacher.age ? String(teacher.age) : "—"}
-                />
-                <ProfileRow
-                  label="Qualification"
-                  value={teacher.qualification || "—"}
-                />
-                <ProfileRow
-                  label="Specialization"
-                  value={teacher.specialization || "—"}
-                />
-                <ProfileRow
-                  label="Experience"
-                  value={`${teacher.experienceYears || 0} years`}
-                />
-              </div>
-            )}
+            ) : null}
           </div>
+          )}
 
           <div className="bg-white rounded-md shadow-sm overflow-hidden">
             <h2 className="text-sm font-semibold text-gray-800 px-6 pt-6 mb-4">
@@ -357,18 +397,47 @@ export default function AdminTeacherProfilePage({
               </table>
             )}
           </div>
+
+          {previousStudents.length > 0 && (
+            <div className="bg-white rounded-md shadow-sm overflow-hidden mt-6">
+              <h2 className="text-sm font-semibold text-gray-800 px-6 pt-6 mb-4">
+                Previous Students in {branch}
+              </h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-left">
+                    <th className="px-6 py-3 font-semibold text-gray-700">Name</th>
+                    <th className="px-6 py-3 font-semibold text-gray-700">Grade</th>
+                    <th className="px-6 py-3 font-semibold text-gray-700">Until</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previousStudents.map((s) => {
+                    const removedAt = (s.teacherHistory || [])
+                      .filter((h) => h.removedAt && h.teacher?._id === teacherId)
+                      .map((h) => h.removedAt as string)
+                      .sort()
+                      .pop();
+                    return (
+                      <tr key={s._id} className="border-b border-gray-50">
+                        <td className="px-6 py-3">{s.fullName}</td>
+                        <td className="px-6 py-3">
+                          {s.grade}
+                          {s.section ? ` · ${s.section}` : ""}
+                        </td>
+                        <td className="px-6 py-3 text-gray-500">
+                          {removedAt ? new Date(removedAt).toLocaleDateString() : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       ) : null}
     </DashboardLayout>
-  );
-}
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between border-b border-gray-50 pb-2">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-800 font-medium">{value}</span>
-    </div>
   );
 }
 

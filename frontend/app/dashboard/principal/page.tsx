@@ -77,7 +77,7 @@ export default function PrincipalDashboardPage() {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Link
           href="/dashboard/principal/students"
           className="bg-white rounded-md shadow-sm p-6 flex flex-col items-center text-center hover:shadow-md transition-shadow"

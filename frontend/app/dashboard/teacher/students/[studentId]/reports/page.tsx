@@ -4,7 +4,6 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
-import BackButton from "@/components/BackButton";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
@@ -30,7 +29,7 @@ export default function TeacherStudentReportsPage({
   const [termAcademicYear, setTermAcademicYear] = useState("");
   const [termTerm, setTermTerm] = useState("");
 
-  const { academicYears, currentTerm } = useAcademicTerms();
+  const { academicYears, currentTerm } = useAcademicTerms(studentId);
 
   useEffect(() => {
     if (!currentTerm) return;
@@ -118,8 +117,6 @@ export default function TeacherStudentReportsPage({
           : undefined
       }
     >
-      <BackButton />
-
       <div className="flex items-center justify-between mt-2 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-blue-900">Reports</h1>

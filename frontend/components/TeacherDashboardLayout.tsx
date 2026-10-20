@@ -7,6 +7,7 @@ import { ReactNode, useEffect, useState } from "react";
 import NotificationBell from "./NotificationBell";
 import UserMenu from "./UserMenu";
 import Breadcrumbs from "./Breadcrumbs";
+import { API_BASE } from "@/lib/config";
 
 interface TeacherDashboardLayoutProps {
   children: ReactNode;
@@ -23,6 +24,15 @@ const navItems = [
   { label: "Reports", href: "/dashboard/teacher/reports", icon: ReportsIcon },
 ];
 
+// Only shadow teachers receive placement requests (class teachers share
+// this layout but are branch-wide, not placed with one child).
+const ASSIGNMENT_REQUESTS_HREF = "/dashboard/teacher/assignment-requests";
+const assignmentRequestsItem = {
+  label: "Shadow Teacher Assignment Requests",
+  href: ASSIGNMENT_REQUESTS_HREF,
+  icon: RequestIcon,
+};
+
 export default function TeacherDashboardLayout({
   children,
   breadcrumbLabels,
@@ -31,6 +41,27 @@ export default function TeacherDashboardLayout({
   const router = useRouter();
   const [userName, setUserName] = useState<string>("User");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isShadowTeacher, setIsShadowTeacher] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState(0);
+
+  useEffect(() => {
+    if (localStorage.getItem("role") !== "shadow_teacher") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value
+    setIsShadowTeacher(true);
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/teacher/assignment-requests/pending-count`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setPendingRequests(data.count);
+      })
+      .catch((err) => console.error("Failed to load assignment request count", err));
+  }, [pathname]);
+
+  const visibleNavItems = isShadowTeacher
+    ? [...navItems, assignmentRequestsItem]
+    : navItems;
 
   useEffect(() => {
     // localStorage is only available client-side, so this can't be read
@@ -91,7 +122,7 @@ export default function TeacherDashboardLayout({
 
         {/* Nav */}
         <nav className="flex-1 py-4">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive =
               item.href === "/dashboard/teacher"
                 ? pathname === item.href
@@ -108,7 +139,12 @@ export default function TeacherDashboardLayout({
                 }`}
               >
                 <item.icon className="w-4 h-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === ASSIGNMENT_REQUESTS_HREF && pendingRequests > 0 && (
+                  <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center leading-none">
+                    {pendingRequests > 9 ? "9+" : pendingRequests}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -218,6 +254,14 @@ function ReportsIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20">
       <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1v-6zM8 7a1 1 0 011-1h2a1 1 0 011 1v10a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v13a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+    </svg>
+  );
+}
+
+function RequestIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
     </svg>
   );
 }

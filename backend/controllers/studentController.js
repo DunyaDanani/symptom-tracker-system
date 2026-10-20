@@ -3,12 +3,15 @@ import bcrypt from "bcrypt";
 import Student from "../models/Student.js";
 import User from "../models/User.js";
 import TeacherProfile from "../models/TeacherProfile.js";
-import TeacherAssignmentRequest from "../models/TeacherAssignmentRequest.js";
+import TeacherAssignmentRequest, {
+  OPEN_REQUEST_STATUSES,
+} from "../models/TeacherAssignmentRequest.js";
 import { BRANCHES } from "../models/Student.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
 import EmotionCheckin from "../models/EmotionCheckin.js";
 import BreakActivityLog from "../models/BreakActivityLog.js";
-import AcademicTerm, { TERMS } from "../models/AcademicTerm.js";
+import AcademicTerm, { TERMS, endOfDayUTC } from "../models/AcademicTerm.js";
+import { termScopeForStudent } from "./academicTermController.js";
 import {
   generateParentCredentials,
   generateTeacherCredentials,
@@ -31,6 +34,43 @@ export const getBranches = (req, res) => {
     branches: BRANCHES,
   });
 };
+
+
+// Looks up the accepted TeacherAssignmentRequest that lets an existing
+// shadow teacher be placed with a child in `branch`. Returns
+// { ok: true, request } or { ok: false, message } explaining what's missing.
+async function findAcceptedRequest(teacherId, branch, session = null) {
+  const query = TeacherAssignmentRequest.findOne({
+    teacher: teacherId,
+    status: { $in: OPEN_REQUEST_STATUSES },
+  });
+  if (session) query.session(session);
+  const request = await query;
+
+  if (!request) {
+    return {
+      ok: false,
+      message:
+        "This shadow teacher is already in the system. Request them through the branch principal and wait for the teacher to accept before assigning them.",
+    };
+  }
+  if (request.branch !== branch) {
+    return {
+      ok: false,
+      message: `This teacher's request is for ${request.branch}, not ${branch}. Cancel it and request them again for ${branch}.`,
+    };
+  }
+  if (request.status !== "accepted") {
+    return {
+      ok: false,
+      message:
+        request.status === "pending"
+          ? "The branch principal hasn't reviewed this request yet."
+          : "The teacher hasn't accepted this request yet.",
+    };
+  }
+  return { ok: true, request };
+}
 
 // @route   POST /api/students
 // @access  Admin only
@@ -175,34 +215,24 @@ export const registerStudent = async (req, res) => {
         });
       }
 
-      // Shadow teachers are meant to be 1:1 with a single student. If this
-      // one already has a student in their care, the admin needs the
-      // branch principal's sign-off first (see TeacherAssignmentRequest) —
-      // re-checked here server-side so the rule holds even if the wizard's
-      // own list rendering is stale or bypassed.
-      const alreadyAssigned = await Student.exists({
-        assignedTeacher: assignedTeacherId,
-        status: "assigned",
-      }).session(session);
-
-      if (alreadyAssigned) {
-        const approvedRequest = await TeacherAssignmentRequest.findOne({
-          teacher: assignedTeacherId,
-          requestedBy: req.user.id,
-          status: "approved",
-        }).session(session);
-
-        if (!approvedRequest) {
-          await session.abortTransaction();
-          return res.status(400).json({
-            success: false,
-            message:
-              "This shadow teacher already has a student assigned. Request branch principal approval before assigning them to another student.",
-          });
-        }
-
-        fulfilledRequestId = approvedRequest._id;
+      // An existing shadow teacher (currently with a student, or kept on
+      // file from an earlier placement) can only be placed with a new child
+      // once the branch principal has passed the request on and the teacher
+      // has accepted it — see TeacherAssignmentRequest. Re-checked here so
+      // the rule holds even if the wizard's list is stale or bypassed.
+      const acceptedRequest = await findAcceptedRequest(
+        assignedTeacherId,
+        branch,
+        session
+      );
+      if (!acceptedRequest.ok) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: acceptedRequest.message,
+        });
       }
+      fulfilledRequestId = acceptedRequest.request._id;
 
       assignedTeacher = teacher._id;
       status = "assigned";
@@ -311,6 +341,7 @@ export const registerStudent = async (req, res) => {
       parentUser: parentUser._id,
       assignedTeacher,
       status,
+      teacherHistory: assignedTeacher ? [{ teacher: assignedTeacher }] : [],
     });
 
     await newStudent.save({ session });
@@ -318,12 +349,22 @@ export const registerStudent = async (req, res) => {
 
     // A used approval is spent — it doesn't grant standing permission for
     // any further students beyond this one.
+    // Conditional on still being "accepted" so the same acceptance can't
+    // be spent twice by two admissions racing each other.
     if (fulfilledRequestId) {
-      await TeacherAssignmentRequest.findByIdAndUpdate(
-        fulfilledRequestId,
-        { status: "fulfilled" },
-        { session }
+      const spent = await TeacherAssignmentRequest.findOneAndUpdate(
+        { _id: fulfilledRequestId, status: "accepted" },
+        { status: "fulfilled", isOpen: false, fulfilledStudent: newStudent._id },
+        { session, returnDocument: "after" }
       );
+      if (!spent) {
+        await session.abortTransaction();
+        return res.status(409).json({
+          success: false,
+          message:
+            "That teacher's acceptance was just used or cancelled. Refresh the teacher list and try again.",
+        });
+      }
     }
 
     await session.commitTransaction();
@@ -419,6 +460,7 @@ export const getAllStudents = async (req, res) => {
   try {
     const students = await Student.find()
       .populate("assignedTeacher", "name username email phone")
+      .populate("teacherHistory.teacher", "name username")
       .populate("parentUser", "name username")
       .populate("studentUser", "name username")
       .sort({ createdAt: -1 });
@@ -456,34 +498,79 @@ export const getAvailableTeachers = async (req, res) => {
       profileMap[p.user.toString()] = p;
     });
 
-    // Shadow teachers are meant to be 1:1 with a single student — figure
-    // out which of these already have one, so the wizard doesn't offer
-    // them as plain "Available" for a second child. See
-    // TeacherAssignmentRequest for the principal-approval override.
-    const assignedTeacherIds = await Student.distinct("assignedTeacher", {
+    // Where each teacher is now and where they've been. teacherHistory
+    // keeps a record after a student is moved away from a teacher, so a
+    // teacher with no current student still shows their last branch.
+    const placements = await Student.find({
+      "teacherHistory.teacher": { $in: teacherIds },
+    }).select("fullName branch assignedTeacher teacherHistory");
+
+    const placementInfo = {};
+    placements.forEach((st) => {
+      st.teacherHistory.forEach((h) => {
+        const key = h.teacher.toString();
+        const info = (placementInfo[key] ||= {
+          current: [],
+          previous: [],
+          lastBranch: null,
+          lastAt: 0,
+        });
+        const isCurrent =
+          !h.removedAt && st.assignedTeacher?.toString() === key;
+        (isCurrent ? info.current : info.previous).push({
+          _id: st._id,
+          name: st.fullName,
+          branch: st.branch,
+        });
+        const at = new Date(h.removedAt || Date.now()).getTime();
+        if (at >= info.lastAt) {
+          info.lastAt = at;
+          info.lastBranch = st.branch;
+        }
+      });
+    });
+
+    // Students admitted before teacherHistory existed only have
+    // assignedTeacher — count those as current placements too.
+    const legacyAssigned = await Student.find({
       assignedTeacher: { $in: teacherIds },
       status: "assigned",
+      "teacherHistory.0": { $exists: false },
+    }).select("fullName branch assignedTeacher");
+    legacyAssigned.forEach((st) => {
+      const key = st.assignedTeacher.toString();
+      const info = (placementInfo[key] ||= {
+        current: [],
+        previous: [],
+        lastBranch: null,
+        lastAt: 0,
+      });
+      info.current.push({ _id: st._id, name: st.fullName, branch: st.branch });
+      info.lastBranch ||= st.branch;
     });
-    const assignedSet = new Set(assignedTeacherIds.map((id) => id.toString()));
 
-    // This admin's own in-flight/decided requests, most recent first, so
-    // an approved-but-not-yet-used request unblocks that one teacher for
-    // THIS admin specifically (not for every admin).
-    const myRequests = await TeacherAssignmentRequest.find({
+    // The teacher's in-progress request (any admin — only one can be open
+    // per teacher), or else their most recent finished one so the wizard
+    // can show "Declined" / "Denied" with the reason.
+    const requests = await TeacherAssignmentRequest.find({
       teacher: { $in: teacherIds },
-      requestedBy: req.user.id,
-      status: { $in: ["pending", "approved", "denied"] },
-    }).sort({ createdAt: -1 });
+      status: { $ne: "fulfilled" },
+    })
+      .sort({ createdAt: -1 })
+      .populate("requestedBy", "name");
 
-    const myRequestByTeacher = {};
-    myRequests.forEach((r) => {
+    const requestByTeacher = {};
+    requests.forEach((r) => {
       const key = r.teacher.toString();
-      if (!myRequestByTeacher[key]) myRequestByTeacher[key] = r;
+      const existing = requestByTeacher[key];
+      const isOpen = (x) => OPEN_REQUEST_STATUSES.includes(x.status);
+      if (!existing || (!isOpen(existing) && isOpen(r))) requestByTeacher[key] = r;
     });
 
     const merged = teachers.map((t) => {
       const key = t._id.toString();
-      const myRequest = myRequestByTeacher[key];
+      const info = placementInfo[key] || { current: [], previous: [], lastBranch: null };
+      const request = requestByTeacher[key];
       return {
         _id: t._id,
         name: t.name,
@@ -495,9 +582,25 @@ export const getAvailableTeachers = async (req, res) => {
         experienceYears: profileMap[key]?.experienceYears || 0,
         age: profileMap[key]?.age || null,
         nic: profileMap[key]?.nic || "",
-        isAssigned: assignedSet.has(key),
-        myRequestStatus: myRequest?.status || null, // "pending" | "approved" | "denied" | null
-        myRequestId: myRequest?._id || null,
+        isAssigned: info.current.length > 0,
+        currentStudents: info.current,
+        previousStudents: info.previous,
+        lastBranch: info.lastBranch,
+        request: request
+          ? {
+              _id: request._id,
+              status: request.status,
+              branch: request.branch,
+              isOpen: OPEN_REQUEST_STATUSES.includes(request.status),
+              requestedBy: request.requestedBy?.name || null,
+              studentName: request.studentName || "",
+              denialReason: request.denialReason,
+              declineReason: request.declineReason,
+            }
+          : null,
+        // Kept for older callers.
+        myRequestStatus: request?.status || null,
+        myRequestId: request?._id || null,
       };
     });
 
@@ -511,6 +614,109 @@ export const getAvailableTeachers = async (req, res) => {
       success: false,
       message: "Server Error",
     });
+  }
+};
+
+// @route   PATCH /api/students/:studentId/teacher
+// @access  Admin only
+// Body: { action: "remove" } — moves the student away from their shadow
+//         teacher. The teacher's account, profile and placement history are
+//         kept, so they can be requested again for another child.
+// Body: { action: "assign", teacherId } — places an existing teacher with
+//         this (currently teacher-less) student. Needs the same accepted
+//         request as admission does.
+export const setStudentTeacher = async (req, res) => {
+  const { studentId } = req.params;
+  const { action, teacherId } = req.body;
+
+  try {
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
+
+    if (action === "remove") {
+      if (!student.assignedTeacher) {
+        return res.status(400).json({
+          success: false,
+          message: "This student has no shadow teacher to remove",
+        });
+      }
+      const now = new Date();
+      const current = student.teacherHistory.find(
+        (h) =>
+          !h.removedAt &&
+          h.teacher.toString() === student.assignedTeacher.toString()
+      );
+      if (current) current.removedAt = now;
+      else
+        // Admitted before history existed — record the placement now so
+        // the teacher's past branch isn't lost.
+        student.teacherHistory.push({
+          teacher: student.assignedTeacher,
+          assignedAt: student.createdAt,
+          removedAt: now,
+        });
+      student.assignedTeacher = null;
+      student.status = "unassigned";
+      await student.save();
+      return res.json({
+        success: true,
+        message: "Shadow teacher removed. Their details stay on file for future requests.",
+        student,
+      });
+    }
+
+    if (action === "assign") {
+      // One shadow teacher per student — remove the current one first.
+      if (student.assignedTeacher) {
+        return res.status(400).json({
+          success: false,
+          message: "This student already has a shadow teacher. Remove them first.",
+        });
+      }
+      const teacher = await User.findOne({ _id: teacherId, role: "shadow_teacher" });
+      if (!teacher) {
+        return res.status(404).json({ success: false, message: "Shadow teacher not found" });
+      }
+
+      const found = await findAcceptedRequest(teacherId, student.branch);
+      if (!found.ok) {
+        return res.status(400).json({ success: false, message: found.message });
+      }
+
+      // Spend the acceptance first (conditionally) so it can't be used
+      // for two students at once.
+      const spent = await TeacherAssignmentRequest.findOneAndUpdate(
+        { _id: found.request._id, status: "accepted" },
+        { status: "fulfilled", isOpen: false, fulfilledStudent: student._id },
+        { returnDocument: "after" }
+      );
+      if (!spent) {
+        return res.status(409).json({
+          success: false,
+          message: "That acceptance was just used or cancelled. Refresh and try again.",
+        });
+      }
+
+      student.assignedTeacher = teacher._id;
+      student.status = "assigned";
+      student.teacherHistory.push({ teacher: teacher._id });
+      await student.save();
+      return res.json({
+        success: true,
+        message: `${teacher.name} is now this student's shadow teacher`,
+        student,
+      });
+    }
+
+    res.status(400).json({
+      success: false,
+      message: "Action must be 'remove' or 'assign'",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
 
@@ -964,12 +1170,17 @@ async function computeTrendBuckets(studentId, range, termWindow) {
 // query params, used by both getSymptomTrends and getStudentReportPdf when
 // range === "term". Returns null if either param is missing or no matching
 // term is configured, so callers can 400 with a clear message.
-async function resolveRequestedTermWindow(query) {
+async function resolveRequestedTermWindow(query, student) {
   const { academicYear, term } = query;
   if (!academicYear || !term) return null;
-  const found = await AcademicTerm.findOne({ academicYear, term });
+  // Look the term up in the student's own branch + National/Cambridge
+  // calendar — "2026 Term 1" has different dates per calendar.
+  const scope = await termScopeForStudent(student);
+  const found = await AcademicTerm.findOne({ ...scope, academicYear, term });
   if (!found) return null;
-  return { start: found.startDate, end: found.endDate };
+  // endOfDayUTC so the last day of the term is included even for rows
+  // saved before end dates were normalised.
+  return { start: found.startDate, end: endOfDayUTC(found.endDate) };
 }
 
 export const getSymptomTrends = async (req, res) => {
@@ -1004,7 +1215,7 @@ export const getSymptomTrends = async (req, res) => {
 
     let termWindow;
     if (range === "term") {
-      termWindow = await resolveRequestedTermWindow(req.query);
+      termWindow = await resolveRequestedTermWindow(req.query, student);
       if (!termWindow) {
         return res.status(400).json({
           success: false,
@@ -1088,7 +1299,7 @@ export const getStudentReportPdf = async (req, res) => {
     let termWindow;
     let termLabel;
     if (range === "term") {
-      termWindow = await resolveRequestedTermWindow(req.query);
+      termWindow = await resolveRequestedTermWindow(req.query, student);
       if (!termWindow) {
         return res.status(400).json({
           success: false,

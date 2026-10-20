@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 
 import { API_BASE } from "@/lib/config";
 interface AssignedTeacher {
@@ -70,7 +69,6 @@ export default function AdminTeacherBranchesPage() {
 
   return (
     <DashboardLayout>
-      <BackButton />
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Shadow Teachers
       </h1>

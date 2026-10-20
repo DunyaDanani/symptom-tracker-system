@@ -3,18 +3,33 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthCard from "@/components/AuthCard";
+import BackButton from "@/components/BackButton";
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  requiredMessage,
+  errorRing,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<"username">>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+
+    const errors: FieldErrors<"username"> = {};
+    if (isBlank(username)) errors.username = requiredMessage("Username");
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setLoading(true);
 
     try {
       const res = await fetch(`${API_BASE}/auth/forgot-password`, {
@@ -56,19 +71,24 @@ export default function ForgotPasswordPage() {
         </div>
       }
       right={
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center bg-slate-100 rounded-sm px-3 py-3">
-            <svg className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Enter Valid Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              className="bg-transparent outline-none w-full text-sm text-gray-700 placeholder-gray-400"
-            />
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          <div>
+            <div className={`flex items-center bg-slate-100 rounded-sm px-3 py-3 ${errorRing(fieldErrors.username)}`}>
+              <svg className="w-4 h-4 text-gray-400 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 9a4 4 0 100-8 4 4 0 000 8zm-7 9a7 7 0 1114 0H3z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Enter Valid Username"
+                value={username}
+                onChange={(e) => {
+                setUsername(e.target.value);
+                setFieldErrors({});
+              }}
+                className="bg-transparent outline-none w-full text-sm text-gray-700 placeholder-gray-400"
+              />
+            </div>
+            <FieldError message={fieldErrors.username} />
           </div>
 
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
@@ -81,10 +101,8 @@ export default function ForgotPasswordPage() {
             {loading ? "SENDING..." : "SUBMIT"}
           </button>
 
-          <p className="text-center text-sm">
-            <a href="/login" className="text-blue-500 hover:underline">
-              Back to Sign-In Page
-            </a>
+          <p className="text-center">
+            <BackButton href="/login" label="Back to Sign-In" />
           </p>
         </form>
       }

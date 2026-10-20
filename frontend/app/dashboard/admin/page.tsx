@@ -112,7 +112,7 @@ export default function AdminDashboardPage() {
       />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         {tiles.map((tile) => {
           const card = (
             <div className="bg-white rounded-md shadow-sm px-5 py-6 text-center hover:shadow-md transition-shadow">

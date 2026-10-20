@@ -3,10 +3,9 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
-import BackButton from "@/components/BackButton";
-import Avatar from "@/components/Avatar";
 import Modal from "@/components/Modal";
 import { API_BASE } from "@/lib/config";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
 
 // Common reasons a shadow teacher (or admin) flags a student for the
 // principal's attention — covers the majority of cases with one click;
@@ -137,45 +136,38 @@ export default function TeacherStudentHubPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <p className="text-gray-400 text-sm mt-4">Loading...</p>
       ) : error ? (
-        <p className="text-red-500 text-sm">{error}</p>
+        <p className="text-red-500 text-sm mt-4">{error}</p>
       ) : (
         <>
-          <BackButton />
 
-          <div className="flex items-start justify-between gap-4 mt-2 mb-6 flex-wrap">
-            <div className="flex items-center gap-4">
-              <Avatar
-                name={student?.fullName || ""}
-                size="lg"
-              />
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold text-blue-900">
-                    {student?.fullName}
-                  </h1>
-                  {student?.flagged && (
-                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                      Flagged
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 mt-1">
-                  {student?.grade}
-                  {student?.section ? ` · ${student.section}` : ""} ·{" "}
-                  {student?.diagnosis}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="text-sm font-medium px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors shrink-0"
-            >
-              View Profile
-            </button>
-          </div>
+          <ProfileBanner
+            className="mt-2 mb-6"
+            name={student?.fullName || ""}
+            lines={[
+              { label: "Admission No", value: student?.admissionNumber },
+              { label: "Grade", value: student?.grade },
+              { label: "Section", value: student?.section },
+              { label: "Diagnosis", value: student?.diagnosis },
+            ]}
+            badges={
+              student?.flagged ? (
+                <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                  Flagged
+                </span>
+              ) : null
+            }
+            actions={
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className={BANNER_ACTION_CLASSES}
+              >
+                View Profile
+              </button>
+            }
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main column */}

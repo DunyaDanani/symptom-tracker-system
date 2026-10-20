@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import Avatar from "@/components/Avatar";
 import AddPrincipalModal from "@/components/AddPrincipalModal";
 
@@ -77,7 +76,6 @@ export default function AdminPrincipalsPage() {
 
   return (
     <DashboardLayout>
-      <BackButton />
       <div className="flex items-center justify-between mt-2 mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">
           Branch Principals

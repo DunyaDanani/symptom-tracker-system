@@ -2,11 +2,16 @@
 
 import { use, useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
-import BackButton from "@/components/BackButton";
 import { SUBJECTS } from "@/lib/subjects";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  requiredMessage,
+  errorBorder,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 interface StudentSummary {
   _id: string;
@@ -66,7 +71,7 @@ export default function TeacherUploadModulesWorkspacePage({
 }) {
   const { studentId } = use(params);
 
-  const { academicYears } = useAcademicTerms();
+  const { academicYears } = useAcademicTerms(studentId);
 
   const [tab, setTab] = useState<Tab>("modules");
 
@@ -94,6 +99,7 @@ export default function TeacherUploadModulesWorkspacePage({
   const [moduleFile, setModuleFile] = useState<File | null>(null);
   const [moduleUploading, setModuleUploading] = useState(false);
   const [moduleError, setModuleError] = useState("");
+  const [topicError, setTopicError] = useState("");
 
   const [pastPaperSubject, setPastPaperSubject] = useState<string>(SUBJECTS[0]);
   const [pastPaperFile, setPastPaperFile] = useState<File | null>(null);
@@ -199,8 +205,8 @@ export default function TeacherUploadModulesWorkspacePage({
     e.preventDefault();
     setModuleError("");
 
-    if (!newTopic.trim()) {
-      setModuleError("Enter a topic name.");
+    if (isBlank(newTopic)) {
+      setTopicError(requiredMessage("Topic name"));
       return;
     }
     if (!moduleFile) {
@@ -306,7 +312,7 @@ export default function TeacherUploadModulesWorkspacePage({
 
   const saveEdit = async (id: string, isModule: boolean) => {
     if (isModule && !editTopic.trim()) {
-      setEditError("Topic name is required.");
+      setEditError(requiredMessage("Topic name"));
       return;
     }
 
@@ -398,10 +404,7 @@ export default function TeacherUploadModulesWorkspacePage({
           : undefined
       }
     >
-      <div className="flex items-center justify-between mt-2 mb-1">
-        <h1 className="text-2xl font-semibold text-blue-900">Modules</h1>
-        <BackButton />
-      </div>
+      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">Modules</h1>
       {student && (
         <p className="text-sm text-gray-500 mb-6">
           {student.fullName} · {student.grade}
@@ -440,7 +443,7 @@ export default function TeacherUploadModulesWorkspacePage({
                   Add file to Share
                 </h2>
 
-                <form onSubmit={handleModuleUpload}>
+                <form onSubmit={handleModuleUpload} noValidate>
                   <div className="flex flex-col sm:flex-row gap-3 mb-4">
                     <select
                       value={moduleSubject}
@@ -453,13 +456,19 @@ export default function TeacherUploadModulesWorkspacePage({
                         </option>
                       ))}
                     </select>
-                    <input
-                      type="text"
-                      value={newTopic}
-                      onChange={(e) => setNewTopic(e.target.value)}
-                      placeholder="Topic name (e.g. Topic 1)"
-                      className="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
-                    />
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={newTopic}
+                        onChange={(e) => {
+                          setNewTopic(e.target.value);
+                          setTopicError("");
+                        }}
+                        placeholder="Topic name (e.g. Topic 1)"
+                        className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(topicError)}`}
+                      />
+                      <FieldError message={topicError} />
+                    </div>
                   </div>
 
                   {academicYears.length === 0 && (

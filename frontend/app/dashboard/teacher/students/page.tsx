@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
-import BackButton from "@/components/BackButton";
 import { API_BASE } from "@/lib/config";
 
 interface AssignedStudent {
@@ -47,7 +46,6 @@ export default function TeacherStudentsPage() {
 
   return (
     <TeacherDashboardLayout>
-      <BackButton />
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Symptom Tracking
       </h1>

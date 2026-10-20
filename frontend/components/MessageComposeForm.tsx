@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  requiredMessage,
+  errorBorder,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 interface Recipient {
   id: string;
   name: string;
@@ -49,6 +56,11 @@ export default function MessageComposeForm() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<
+    FieldErrors<"recipientId" | "category" | "body">
+  >({});
+  const clearFieldError = (field: "recipientId" | "category" | "body") =>
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   const [sendSuccess, setSendSuccess] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -106,10 +118,12 @@ export default function MessageComposeForm() {
     setStatus("");
     setSendSuccess(false);
 
-    if (!recipientId || !category || !body) {
-      setStatus("Select a recipient, a category, and write a message.");
-      return;
-    }
+    const errors: FieldErrors<"recipientId" | "category" | "body"> = {};
+    if (isBlank(recipientId)) errors.recipientId = requiredMessage("Recipient");
+    if (isBlank(category)) errors.category = requiredMessage("Message category");
+    if (isBlank(body)) errors.body = requiredMessage("Message");
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSending(true);
     try {
@@ -168,6 +182,7 @@ export default function MessageComposeForm() {
   return (
     <form
       onSubmit={handleSend}
+      noValidate
       className="bg-white rounded-md shadow-sm p-6 max-w-xl mx-auto"
     >
       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -225,7 +240,10 @@ export default function MessageComposeForm() {
                 <button
                   type="button"
                   key={r.id}
-                  onClick={() => setRecipientId(r.id)}
+                  onClick={() => {
+                    setRecipientId(r.id);
+                    clearFieldError("recipientId");
+                  }}
                   className={`w-full flex items-center justify-between text-left px-3 py-2 text-sm transition-colors ${
                     recipientId === r.id
                       ? "bg-sky-100 text-sky-800 font-medium"
@@ -239,6 +257,7 @@ export default function MessageComposeForm() {
             )}
           </div>
 
+          <FieldError message={fieldErrors.recipientId} />
           {selectedRecipient && (
             <p className="text-xs text-sky-700 mt-2">
               Selected: {selectedRecipient.name} ({selectedRecipient.roleLabel})
@@ -246,10 +265,14 @@ export default function MessageComposeForm() {
           )}
         </div>
       ) : (
+        <div className="mb-5">
         <select
-          className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-5 outline-none focus:border-sky-400"
+          className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.recipientId)}`}
           value={recipientId}
-          onChange={(e) => setRecipientId(e.target.value)}
+          onChange={(e) => {
+            setRecipientId(e.target.value);
+            clearFieldError("recipientId");
+          }}
         >
           <option value="">Select a recipient</option>
           {recipientGroups.map(({ group, items }) => (
@@ -262,18 +285,25 @@ export default function MessageComposeForm() {
             </optgroup>
           ))}
         </select>
+        <FieldError message={fieldErrors.recipientId} />
+        </div>
       )}
 
       <label className="block text-sm font-medium text-gray-700 mb-1">
         02. Message Category
       </label>
       <div className="mb-5">
-        <div className="border border-slate-200 rounded max-h-56 overflow-y-auto">
+        <div
+          className={`border border-slate-200 rounded max-h-56 overflow-y-auto ${errorBorder(fieldErrors.category)}`}
+        >
           {categories.map((c) => (
             <button
               type="button"
               key={c}
-              onClick={() => setCategory(c)}
+              onClick={() => {
+                setCategory(c);
+                clearFieldError("category");
+              }}
               className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                 category === c
                   ? "bg-sky-100 text-sky-800 font-medium"
@@ -284,6 +314,7 @@ export default function MessageComposeForm() {
             </button>
           ))}
         </div>
+        <FieldError message={fieldErrors.category} />
         {category && (
           <p className="text-xs text-sky-700 mt-2">Selected: {category}</p>
         )}
@@ -292,12 +323,18 @@ export default function MessageComposeForm() {
       <label className="block text-sm font-medium text-gray-700 mb-1">
         03. Type your message
       </label>
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        rows={4}
-        className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-5 outline-none focus:border-sky-400"
-      />
+      <div className="mb-5">
+        <textarea
+          value={body}
+          onChange={(e) => {
+            setBody(e.target.value);
+            clearFieldError("body");
+          }}
+          rows={4}
+          className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.body)}`}
+        />
+        <FieldError message={fieldErrors.body} />
+      </div>
 
       <label className="block text-sm font-medium text-gray-700 mb-1">
         04. Upload attachment (Optional)

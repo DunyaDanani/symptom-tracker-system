@@ -3,13 +3,26 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { categoryForGrade, gradeSlugForValue } from "@/lib/gradeTaxonomy";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  isValidEmail,
+  requiredMessage,
+  errorBorder,
+  INVALID_EMAIL_MESSAGE,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import StudentTeacherPanel, {
+  type TeacherHistoryEntry,
+} from "@/components/StudentTeacherPanel";
 interface MedicationEntry {
   name: string;
   dosage?: string;
@@ -103,6 +116,7 @@ interface StudentRecord {
     email?: string | null;
     phone?: string | null;
   } | null;
+  teacherHistory?: TeacherHistoryEntry[];
 }
 
 type ProfileForm = {
@@ -169,7 +183,7 @@ export default function AdminStudentHistoryPage({
 }) {
   const { studentId } = use(params);
 
-  const { academicYears, currentTerm } = useAcademicTerms();
+  const { academicYears, currentTerm } = useAcademicTerms(studentId);
 
   const [symptomOptions, setSymptomOptions] = useState<string[]>([]);
   const [symptomLogs, setSymptomLogs] = useState<SymptomLogEntry[]>([]);
@@ -196,6 +210,7 @@ export default function AdminStudentHistoryPage({
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState<ProfileForm>(blankProfileForm);
   const [profileStatus, setProfileStatus] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [studentRecord, setStudentRecord] = useState<StudentRecord | null>(
     null
@@ -342,19 +357,26 @@ export default function AdminStudentHistoryPage({
     }
   };
 
+  const [profileErrors, setProfileErrors] = useState<
+    FieldErrors<keyof ProfileForm>
+  >({});
+
   const updateProfileField = (field: keyof ProfileForm, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
+    setProfileErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const startEditProfile = () => {
     if (studentRecord) setProfileForm(profileFromStudent(studentRecord));
     setProfileStatus("");
+    setProfileErrors({});
     setEditingProfile(true);
   };
 
   const cancelEditProfile = () => {
     if (studentRecord) setProfileForm(profileFromStudent(studentRecord));
     setProfileStatus("");
+    setProfileErrors({});
     setEditingProfile(false);
   };
 
@@ -362,19 +384,19 @@ export default function AdminStudentHistoryPage({
     e.preventDefault();
     setProfileStatus("");
 
-    if (
-      !profileForm.fullName.trim() ||
-      !profileForm.dateOfBirth ||
-      !profileForm.gender ||
-      !profileForm.grade.trim() ||
-      !profileForm.diagnosis.trim() ||
-      !profileForm.parentFirstName.trim() ||
-      !profileForm.parentEmail.trim() ||
-      !profileForm.parentPhone.trim()
-    ) {
-      setProfileStatus("Please fill in all required fields.");
-      return;
-    }
+    const errors: FieldErrors<keyof ProfileForm> = {};
+    if (isBlank(profileForm.fullName)) errors.fullName = requiredMessage("Full Name");
+    if (isBlank(profileForm.dateOfBirth)) errors.dateOfBirth = requiredMessage("Date of Birth");
+    if (isBlank(profileForm.gender)) errors.gender = requiredMessage("Gender");
+    if (isBlank(profileForm.grade)) errors.grade = requiredMessage("Grade / Class");
+    if (isBlank(profileForm.diagnosis)) errors.diagnosis = requiredMessage("Primary Diagnosis");
+    if (isBlank(profileForm.parentFirstName)) errors.parentFirstName = requiredMessage("Parent Name");
+    if (isBlank(profileForm.parentEmail)) errors.parentEmail = requiredMessage("Parent Email");
+    if (isBlank(profileForm.parentPhone)) errors.parentPhone = requiredMessage("Parent Phone");
+    if (!errors.parentEmail && !isValidEmail(profileForm.parentEmail))
+      errors.parentEmail = INVALID_EMAIL_MESSAGE;
+    setProfileErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSavingProfile(true);
     try {
@@ -652,8 +674,6 @@ export default function AdminStudentHistoryPage({
       }
       breadcrumbMiddleCrumbs={middleCrumbs}
     >
-      <BackButton />
-
       <div className="flex items-center justify-between mt-2 mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">
           Student History
@@ -666,6 +686,105 @@ export default function AdminStudentHistoryPage({
           Print Report
         </Link>
       </div>
+
+      {studentRecord && (
+        <ProfileBanner
+          className="-mt-4 mb-6"
+          name={studentRecord.fullName}
+          lines={[
+            { label: "Admission No", value: studentRecord.admissionNumber },
+            { label: "Grade", value: studentRecord.grade },
+            { label: "Section", value: studentRecord.section },
+            { label: "Branch", value: studentRecord.branch },
+            {
+              label: "Shadow Teacher",
+              value: studentRecord.assignedTeacher?.name || "Unassigned",
+            },
+          ]}
+          badges={
+            studentRecord.flagged ? (
+              <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                Flagged
+              </span>
+            ) : null
+          }
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => setShowProfile(true)}
+                className={BANNER_ACTION_CLASSES}
+              >
+                View Profile
+              </button>
+              {!editingProfile && (
+                <button
+                  type="button"
+                  onClick={startEditProfile}
+                  className={BANNER_ACTION_CLASSES}
+                >
+                  Edit Profile
+                </button>
+              )}
+            </>
+          }
+        />
+      )}
+
+      {studentRecord && (
+        <ProfileDetailsModal
+          open={showProfile}
+          onClose={() => setShowProfile(false)}
+          title="Student Profile"
+          sections={[
+            {
+              heading: "Student",
+              rows: [
+                { label: "Full Name", value: studentRecord.fullName, wide: true },
+                { label: "Admission No", value: studentRecord.admissionNumber },
+                { label: "Branch", value: studentRecord.branch },
+                { label: "Grade", value: studentRecord.grade },
+                { label: "Section", value: studentRecord.section },
+                {
+                  label: "Date of Birth",
+                  value: studentRecord.dateOfBirth
+                    ? new Date(studentRecord.dateOfBirth).toLocaleDateString()
+                    : "",
+                },
+                { label: "Gender", value: studentRecord.gender, capitalize: true },
+                { label: "Diagnosis", value: studentRecord.diagnosis },
+                {
+                  label: "Communication",
+                  value: studentRecord.communicationLevel?.replace("-", " "),
+                  capitalize: true,
+                },
+                { label: "Additional Notes", value: studentRecord.additionalNotes, wide: true },
+              ],
+            },
+            {
+              heading: "Parent / Guardian",
+              rows: [
+                {
+                  label: "Name",
+                  value: `${studentRecord.parentTitle ? `${studentRecord.parentTitle} ` : ""}${studentRecord.parentFirstName}`,
+                },
+                { label: "Relationship", value: studentRecord.parentRelationship },
+                { label: "Phone", value: studentRecord.parentPhone },
+                { label: "Email", value: studentRecord.parentEmail },
+                { label: "Address", value: studentRecord.homeCity, wide: true },
+              ],
+            },
+            {
+              heading: "Shadow Teacher",
+              rows: [
+                { label: "Name", value: studentRecord.assignedTeacher?.name || "Unassigned" },
+                { label: "Phone", value: studentRecord.assignedTeacher?.phone },
+                { label: "Email", value: studentRecord.assignedTeacher?.email, wide: true },
+              ],
+            },
+          ]}
+        />
+      )}
 
       {loading ? (
         <p className="text-gray-400 text-sm">Loading...</p>
@@ -723,20 +842,12 @@ export default function AdminStudentHistoryPage({
           <div className="bg-white rounded-md shadow-sm p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-700">
-                Student Profile
+                {editingProfile ? "Edit Student Profile" : "Shadow Teacher"}
               </h2>
-              {!editingProfile && (
-                <button
-                  onClick={startEditProfile}
-                  className="text-xs text-blue-600 hover:underline"
-                >
-                  Edit Profile
-                </button>
-              )}
             </div>
 
             {editingProfile ? (
-              <form onSubmit={saveProfile}>
+              <form onSubmit={saveProfile} noValidate>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <ProfileField label="Branch">
                     <select
@@ -762,28 +873,28 @@ export default function AdminStudentHistoryPage({
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="Full Name">
+                  <ProfileField label="Full Name" error={profileErrors.fullName}>
                     <input
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.fullName)}`}
                       value={profileForm.fullName}
                       onChange={(e) =>
                         updateProfileField("fullName", e.target.value)
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="Date of Birth">
+                  <ProfileField label="Date of Birth" error={profileErrors.dateOfBirth}>
                     <input
                       type="date"
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.dateOfBirth)}`}
                       value={profileForm.dateOfBirth}
                       onChange={(e) =>
                         updateProfileField("dateOfBirth", e.target.value)
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="Gender">
+                  <ProfileField label="Gender" error={profileErrors.gender}>
                     <select
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.gender)}`}
                       value={profileForm.gender}
                       onChange={(e) =>
                         updateProfileField("gender", e.target.value)
@@ -795,9 +906,9 @@ export default function AdminStudentHistoryPage({
                       <option value="other">Other</option>
                     </select>
                   </ProfileField>
-                  <ProfileField label="Grade / Class">
+                  <ProfileField label="Grade / Class" error={profileErrors.grade}>
                     <input
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.grade)}`}
                       value={profileForm.grade}
                       onChange={(e) =>
                         updateProfileField("grade", e.target.value)
@@ -818,9 +929,9 @@ export default function AdminStudentHistoryPage({
                       <option value="C">C</option>
                     </select>
                   </ProfileField>
-                  <ProfileField label="Primary Diagnosis">
+                  <ProfileField label="Primary Diagnosis" error={profileErrors.diagnosis}>
                     <input
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.diagnosis)}`}
                       value={profileForm.diagnosis}
                       onChange={(e) =>
                         updateProfileField("diagnosis", e.target.value)
@@ -885,9 +996,9 @@ export default function AdminStudentHistoryPage({
                       <option value="Miss">Miss</option>
                     </select>
                   </ProfileField>
-                  <ProfileField label="Parent Name">
+                  <ProfileField label="Parent Name" error={profileErrors.parentFirstName}>
                     <input
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.parentFirstName)}`}
                       value={profileForm.parentFirstName}
                       onChange={(e) =>
                         updateProfileField("parentFirstName", e.target.value)
@@ -907,19 +1018,19 @@ export default function AdminStudentHistoryPage({
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="Parent Email">
+                  <ProfileField label="Parent Email" error={profileErrors.parentEmail}>
                     <input
                       type="email"
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.parentEmail)}`}
                       value={profileForm.parentEmail}
                       onChange={(e) =>
                         updateProfileField("parentEmail", e.target.value)
                       }
                     />
                   </ProfileField>
-                  <ProfileField label="Parent Phone">
+                  <ProfileField label="Parent Phone" error={profileErrors.parentPhone}>
                     <input
-                      className="profile-input"
+                      className={`profile-input ${errorBorder(profileErrors.parentPhone)}`}
                       value={profileForm.parentPhone}
                       onChange={(e) =>
                         updateProfileField("parentPhone", e.target.value)
@@ -965,67 +1076,9 @@ export default function AdminStudentHistoryPage({
               </form>
             ) : studentRecord ? (
               <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3 text-sm">
-                <InfoRow label="Branch" value={studentRecord.branch} />
-                <InfoRow
-                  label="Admission #"
-                  value={studentRecord.admissionNumber}
-                />
-                <InfoRow
-                  label="Name"
-                  value={studentRecord.fullName}
-                />
-                <InfoRow
-                  label="Date of Birth"
-                  value={
-                    studentRecord.dateOfBirth
-                      ? new Date(
-                          studentRecord.dateOfBirth
-                        ).toLocaleDateString()
-                      : "—"
-                  }
-                />
-                <InfoRow label="Gender" value={studentRecord.gender} />
-                <InfoRow
-                  label="Grade / Section"
-                  value={`${studentRecord.grade}${
-                    studentRecord.section ? ` · ${studentRecord.section}` : ""
-                  }`}
-                />
-                <InfoRow label="Diagnosis" value={studentRecord.diagnosis} />
-                <InfoRow
-                  label="Communication"
-                  value={studentRecord.communicationLevel}
-                />
-                <InfoRow
-                  label="Address"
-                  value={studentRecord.homeCity || "—"}
-                />
-                <InfoRow
-                  label="Parent"
-                  value={`${
-                    studentRecord.parentTitle
-                      ? `${studentRecord.parentTitle} `
-                      : ""
-                  }${studentRecord.parentFirstName}${
-                    studentRecord.parentRelationship
-                      ? ` (${studentRecord.parentRelationship})`
-                      : ""
-                  }`}
-                />
-                <InfoRow
-                  label="Parent Email"
-                  value={studentRecord.parentEmail}
-                />
-                <InfoRow
-                  label="Parent Phone"
-                  value={studentRecord.parentPhone}
-                />
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <p className="text-xs text-gray-400">Shadow Teacher</p>
+                  <p className="text-xs text-gray-400">Assigned</p>
                   <p className="text-gray-800 font-medium text-sm">
                     {studentRecord.assignedTeacher?.name || "Unassigned"}
                   </p>
@@ -1060,6 +1113,13 @@ export default function AdminStudentHistoryPage({
                   </div>
                 )}
               </div>
+              <StudentTeacherPanel
+                studentId={studentId}
+                branch={studentRecord.branch}
+                hasTeacher={!!studentRecord.assignedTeacher}
+                teacherHistory={studentRecord.teacherHistory}
+                onChanged={loadStudent}
+              />
               </>
             ) : (
               <p className="text-gray-400 text-sm">
@@ -1539,10 +1599,12 @@ function ProfileField({
   label,
   className,
   children,
+  error,
 }: {
   label: string;
   className?: string;
   children: React.ReactNode;
+  error?: string;
 }) {
   return (
     <div className={className}>
@@ -1550,15 +1612,7 @@ function ProfileField({
         {label}
       </label>
       {children}
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-gray-800">{value || "—"}</p>
+      <FieldError message={error} />
     </div>
   );
 }

@@ -111,7 +111,7 @@ export default function TeacherDashboardPage() {
       <h1 className="text-2xl font-semibold text-blue-900 mb-8">Dashboard</h1>
 
       {/* Icon tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         {tiles.map((tile) => {
           const card = (
             <div className="bg-white rounded-md shadow-sm px-5 py-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow">

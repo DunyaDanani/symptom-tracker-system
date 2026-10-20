@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
@@ -107,7 +106,6 @@ export default function AdminDocReviewsPage() {
 
   return (
     <DashboardLayout>
-      <BackButton />
       <div className="flex items-center justify-between mt-2 mb-8 gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold text-blue-900">Doctor&apos;s Recommendation</h1>
         <div className="flex gap-2 items-center flex-wrap">

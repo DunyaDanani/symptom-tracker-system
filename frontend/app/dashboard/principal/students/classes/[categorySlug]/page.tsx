@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
 import {
   getCategory,
   categoryForGrade,
@@ -79,8 +78,6 @@ export default function PrincipalClassCategoryPage({
 
   return (
     <PrincipalDashboardLayout>
-      <BackButton />
-
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         {category.label}
       </h1>

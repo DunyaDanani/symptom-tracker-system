@@ -162,6 +162,23 @@ const studentSchema = new mongoose.Schema(
       default: "unassigned",
     },
 
+    // Every shadow teacher this student has had, oldest first. The current
+    // one has no removedAt. Kept so a teacher's past placements (and the
+    // branch they worked in) stay on record after a student moves away
+    // from them, which is what lets an admin find and re-request them for
+    // a new child later.
+    teacherHistory: [
+      {
+        teacher: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        assignedAt: { type: Date, default: Date.now },
+        removedAt: { type: Date, default: null },
+      },
+    ],
+
     // Manual "needs attention" flag — set by a shadow teacher or admin,
     // surfaced on the principal's dashboard alongside auto-detected flags.
     flagged: {

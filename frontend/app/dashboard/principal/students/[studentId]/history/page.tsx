@@ -2,7 +2,6 @@
 
 import { use, useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
@@ -106,8 +105,6 @@ export default function PrincipalStudentHistoryPage({
 
   return (
     <PrincipalDashboardLayout>
-      <BackButton />
-
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Student History
       </h1>

@@ -3,6 +3,13 @@
 import { useEffect, useState } from "react";
 
 import { API_BASE } from "@/lib/config";
+import {
+  isBlank,
+  requiredMessage,
+  errorBorder,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -35,6 +42,9 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
   const [body, setBody] = useState("");
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<"title" | "body">>(
+    {}
+  );
   const [successMsg, setSuccessMsg] = useState("");
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -87,10 +97,11 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !body.trim()) {
-      setPostError("Please fill in both the title and the notice text.");
-      return;
-    }
+    const errors: FieldErrors<"title" | "body"> = {};
+    if (isBlank(title)) errors.title = requiredMessage("Title");
+    if (isBlank(body)) errors.body = requiredMessage("Notice Text");
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setPosting(true);
     setPostError("");
@@ -148,6 +159,7 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
       {canPost && (
         <form
           onSubmit={handlePost}
+          noValidate
           className="bg-white rounded-md shadow-sm p-6 space-y-4"
         >
           <h2 className="text-sm font-semibold text-gray-800">
@@ -161,10 +173,14 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, title: undefined }));
+              }}
               placeholder="e.g. Half-term break schedule"
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className={`w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${errorBorder(fieldErrors.title)}`}
             />
+            <FieldError message={fieldErrors.title} />
           </div>
 
           <div>
@@ -173,11 +189,15 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
             </label>
             <textarea
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e) => {
+                setBody(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, body: undefined }));
+              }}
               rows={4}
               placeholder="Write the notice here..."
-              className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className={`w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 ${errorBorder(fieldErrors.body)}`}
             />
+            <FieldError message={fieldErrors.body} />
           </div>
 
           {postError && (

@@ -12,6 +12,7 @@ export const MESSAGE_CATEGORIES = [
   "Meeting Request",
   "Emergency",
   "Account Recovery",
+  "Teacher Assignment",
 ];
 
 const messageSchema = new mongoose.Schema(

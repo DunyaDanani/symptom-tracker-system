@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import Avatar from "@/components/Avatar";
-import { isValidEmail } from "@/lib/validation";
+import {
+  isValidEmail,
+  isBlank,
+  requiredMessage,
+  errorBorder,
+  INVALID_EMAIL_MESSAGE,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
 import { API_BASE } from "@/lib/config";
 
@@ -22,7 +29,6 @@ interface Principal {
 
 export default function EditPrincipalPage() {
   const { principalId } = useParams<{ principalId: string }>();
-  const router = useRouter();
 
   const [branches, setBranches] = useState<string[]>([]);
   const [principal, setPrincipal] = useState<Principal | null>(null);
@@ -34,6 +40,12 @@ export default function EditPrincipalPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<
+    FieldErrors<"name" | "branch" | "email">
+  >({});
+
+  const clearFieldError = (field: "name" | "branch" | "email") =>
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
 
   useEffect(() => {
     const load = async () => {
@@ -85,20 +97,14 @@ export default function EditPrincipalPage() {
     setError("");
     setStatus(null);
 
-    if (!name.trim() || !branch) {
-      setError("Name and branch are required");
-      return;
-    }
+    const errors: FieldErrors<"name" | "branch" | "email"> = {};
+    if (isBlank(name)) errors.name = requiredMessage("Full Name");
+    if (isBlank(branch)) errors.branch = requiredMessage("Branch");
+    if (isBlank(email)) errors.email = requiredMessage("Email");
+    else if (!isValidEmail(email.trim())) errors.email = INVALID_EMAIL_MESSAGE;
 
-    if (!email.trim()) {
-      setError("Email is required");
-      return;
-    }
-
-    if (!isValidEmail(email.trim())) {
-      setError("Enter a valid email address (e.g. name@example.com)");
-      return;
-    }
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSaving(true);
     const token = localStorage.getItem("token");
@@ -140,7 +146,6 @@ export default function EditPrincipalPage() {
   if (!principal) {
     return (
       <DashboardLayout>
-        <BackButton />
         <p className="text-red-500 text-sm mt-4">
           {error || "Principal not found"}
         </p>
@@ -150,7 +155,6 @@ export default function EditPrincipalPage() {
 
   return (
     <DashboardLayout breadcrumbLabels={{ [principalId]: principal.name }}>
-      <BackButton />
       <div className="flex items-center gap-4 mt-2 mb-6">
         <Avatar name={principal.name} size="lg" />
         <div>
@@ -166,6 +170,7 @@ export default function EditPrincipalPage() {
 
       <form
         onSubmit={handleSave}
+        noValidate
         className="bg-white rounded-md shadow-sm p-6 max-w-xl space-y-4"
       >
         {error && <p className="text-sm text-red-500">{error}</p>}
@@ -191,10 +196,14 @@ export default function EditPrincipalPage() {
             Full Name
           </label>
           <input
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+            className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.name)}`}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              clearFieldError("name");
+            }}
           />
+          <FieldError message={fieldErrors.name} />
         </div>
 
         <div>
@@ -202,9 +211,12 @@ export default function EditPrincipalPage() {
             Branch
           </label>
           <select
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+            className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.branch)}`}
             value={branch}
-            onChange={(e) => setBranch(e.target.value)}
+            onChange={(e) => {
+              setBranch(e.target.value);
+              clearFieldError("branch");
+            }}
           >
             {branches.map((b) => (
               <option key={b} value={b}>
@@ -212,6 +224,7 @@ export default function EditPrincipalPage() {
               </option>
             ))}
           </select>
+          <FieldError message={fieldErrors.branch} />
         </div>
 
         <div>
@@ -220,12 +233,15 @@ export default function EditPrincipalPage() {
           </label>
           <input
             type="email"
-            required
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+            className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.email)}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError("email");
+            }}
             placeholder="you@example.com"
           />
+          <FieldError message={fieldErrors.email} />
           <p className="text-xs text-gray-400 mt-1">
             Used for account recovery (forgot username / password).
           </p>
@@ -261,12 +277,6 @@ export default function EditPrincipalPage() {
         </div>
       </form>
 
-      <button
-        onClick={() => router.push("/dashboard/admin/principals")}
-        className="text-sm text-gray-500 hover:underline mt-4"
-      >
-        ← Back to all principals
-      </button>
     </DashboardLayout>
   );
 }

@@ -3,9 +3,10 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
 
 import { API_BASE } from "@/lib/config";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import ProfileDetailsModal from "@/components/ProfileDetailsModal";
 interface TeacherProfileData {
   _id: string;
   name: string;
@@ -31,6 +32,7 @@ export default function PrincipalTeacherProfilePage({
   const { teacherId } = use(params);
 
   const [teacher, setTeacher] = useState<TeacherProfileData | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,43 +66,55 @@ export default function PrincipalTeacherProfilePage({
     <PrincipalDashboardLayout
       breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
     >
-      <BackButton />
-
       {loading ? (
         <p className="text-gray-400 text-sm mt-2">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : teacher ? (
         <>
-          <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
-            {teacher.name}
-          </h1>
-          <p className="text-sm text-gray-500 mb-8">Shadow Teacher</p>
+          <ProfileBanner
+            className="mt-2 mb-6"
+            name={teacher.name}
+            lines={[
+              { label: "Role", value: "Shadow Teacher" },
+              { label: "Username", value: teacher.username },
+              { label: "Specialization", value: teacher.specialization },
+              {
+                label: "Experience",
+                value: `${teacher.experienceYears || 0} years`,
+              },
+              { label: "Assigned Students", value: students.length },
+            ]}
+            actions={
+              <button
+                onClick={() => setShowProfile(true)}
+                className={BANNER_ACTION_CLASSES}
+              >
+                View Profile
+              </button>
+            }
+          />
 
-          <div className="bg-white rounded-md shadow-sm p-6 mb-6">
-            <h2 className="text-sm font-semibold text-gray-800 mb-4">
-              Profile
-            </h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <ProfileRow label="Username" value={teacher.username} />
-              <ProfileRow
-                label="Age"
-                value={teacher.age ? String(teacher.age) : "—"}
-              />
-              <ProfileRow
-                label="Qualification"
-                value={teacher.qualification || "—"}
-              />
-              <ProfileRow
-                label="Specialization"
-                value={teacher.specialization || "—"}
-              />
-              <ProfileRow
-                label="Experience"
-                value={`${teacher.experienceYears || 0} years`}
-              />
-            </div>
-          </div>
+          <ProfileDetailsModal
+            open={showProfile}
+            onClose={() => setShowProfile(false)}
+            title="Shadow Teacher Profile"
+            sections={[
+              {
+                rows: [
+                  { label: "Name", value: teacher.name, wide: true },
+                  { label: "Username", value: teacher.username },
+                  { label: "Age", value: teacher.age },
+                  { label: "Qualification", value: teacher.qualification },
+                  { label: "Specialization", value: teacher.specialization },
+                  {
+                    label: "Experience",
+                    value: `${teacher.experienceYears || 0} years`,
+                  },
+                ],
+              },
+            ]}
+          />
 
           <div className="bg-white rounded-md shadow-sm overflow-hidden">
             <h2 className="text-sm font-semibold text-gray-800 px-6 pt-6 mb-4">
@@ -153,11 +167,3 @@ export default function PrincipalTeacherProfilePage({
   );
 }
 
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between border-b border-gray-50 pb-2">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-800 font-medium">{value}</span>
-    </div>
-  );
-}

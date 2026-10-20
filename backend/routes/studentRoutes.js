@@ -21,10 +21,12 @@ import {
   adminDeleteEmotionCheckin,
   updateTeacherAccount,
   updateStudentProfile,
+  setStudentTeacher,
 } from "../controllers/studentController.js";
 import {
   createTeacherAssignmentRequest,
   listMyTeacherAssignmentRequests,
+  cancelTeacherAssignmentRequest,
 } from "../controllers/teacherAssignmentRequestController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
@@ -88,6 +90,8 @@ router.get("/teachers", getAvailableTeachers);
 router.patch("/teachers/:id", updateTeacherAccount);
 router.post("/teachers/:id/request-assignment", createTeacherAssignmentRequest);
 router.get("/teacher-requests/mine", listMyTeacherAssignmentRequests);
+router.patch("/teacher-requests/:id/cancel", cancelTeacherAssignmentRequest);
+router.patch("/:studentId/teacher", setStudentTeacher);
 router.patch("/:studentId", updateStudentProfile);
 router.patch("/:studentId/flag", adminSetStudentFlag);
 

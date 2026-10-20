@@ -9,6 +9,10 @@ export type Term = (typeof TERMS)[number];
 
 export interface AcademicTermEntry {
   _id: string;
+  // Each term belongs to one branch + National/Cambridge calendar. Terms
+  // created before calendars were split have neither (school-wide).
+  branch?: string | null;
+  programCategory?: "national" | "cambridge" | null;
   academicYear: string;
   term: Term;
   startDate: string;
@@ -40,15 +44,25 @@ export function getAcademicYears(terms: AcademicTermEntry[]): string[] {
 // on symptom/emotion logging forms, the Modules upload form, the report
 // range picker, and the admin settings page that manages the calendar
 // itself.
-export function useAcademicTerms() {
+//
+// `studentId`:
+//   - omitted   -> every branch's/curriculum's terms (admin calendar page)
+//   - a string  -> only the calendar for that student's branch and
+//                  National/Cambridge category (every per-student page)
+//   - null      -> student not known yet; waits instead of fetching
+export function useAcademicTerms(studentId?: string | null) {
   const [terms, setTerms] = useState<AcademicTermEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = async () => {
+    if (studentId === null) return;
     const token = localStorage.getItem("token");
+    const query = studentId
+      ? `?studentId=${encodeURIComponent(studentId)}`
+      : "";
     try {
-      const res = await fetch(`${API_BASE}/academic-terms`, {
+      const res = await fetch(`${API_BASE}/academic-terms${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -68,7 +82,7 @@ export function useAcademicTerms() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [studentId]);
 
   return {
     terms,

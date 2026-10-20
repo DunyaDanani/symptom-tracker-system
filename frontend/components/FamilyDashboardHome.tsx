@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import MiniCalendar from "@/components/MiniCalendar";
 
 import { API_BASE } from "@/lib/config";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import ProfileDetailsModal from "@/components/ProfileDetailsModal";
 
 type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 
@@ -17,9 +19,18 @@ interface LinkedStudent {
   diagnosis: string;
   communicationLevel: string;
   examEligibility?: EligibilityStatus;
-  assignedTeacher?: { name: string } | null;
+  assignedTeacher?: { name: string; phone?: string | null; email?: string | null } | null;
   parentUser?: { name: string } | null;
   studentUser?: { name: string } | null;
+  branch?: string;
+  programCategory?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  parentFirstName?: string;
+  parentRelationship?: string;
+  parentPhone?: string;
+  parentEmail?: string;
+  homeCity?: string;
 }
 
 const ELIGIBILITY_LABEL: Record<EligibilityStatus, string> = {
@@ -38,6 +49,7 @@ export default function FamilyDashboardHome({
   role: "parent" | "child";
 }) {
   const [student, setStudent] = useState<LinkedStudent | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [today] = useState(new Date());
@@ -109,10 +121,10 @@ export default function FamilyDashboardHome({
         </p>
 
         {/* Icon tiles — bigger, brighter, bouncier for kids */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
           {tiles.map((tile) => (
-            <Link key={tile.label} href={tile.href}>
-              <div className="bg-white rounded-3xl shadow-sm px-6 py-8 flex flex-col items-center gap-3 text-center hover:shadow-lg hover:-translate-y-1 transition-all border-2 border-transparent hover:border-sky-100">
+            <Link key={tile.label} href={tile.href} className="block h-full">
+              <div className="h-full bg-white rounded-3xl shadow-sm px-6 py-8 flex flex-col items-center gap-3 text-center hover:shadow-lg hover:-translate-y-1 transition-all border-2 border-transparent hover:border-sky-100">
                 <div
                   className={`w-20 h-20 rounded-full flex items-center justify-center ${tile.color}`}
                 >
@@ -170,10 +182,10 @@ export default function FamilyDashboardHome({
       <h1 className="text-2xl font-semibold text-blue-900 mb-8">Dashboard</h1>
 
       {/* Icon tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         {tiles.map((tile) => (
-          <Link key={tile.label} href={tile.href}>
-            <div className="bg-white rounded-md shadow-sm px-5 py-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow">
+          <Link key={tile.label} href={tile.href} className="block h-full">
+            <div className="h-full bg-white rounded-md shadow-sm px-5 py-6 flex flex-col items-center gap-3 hover:shadow-md transition-shadow">
               <div
                 className={`w-12 h-12 rounded-full flex items-center justify-center ${tile.color}`}
               >
@@ -188,38 +200,110 @@ export default function FamilyDashboardHome({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Student info card */}
-        <div className="bg-white rounded-md shadow-sm p-6">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">
-            My Child
-          </h2>
-
-          {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
-          ) : error ? (
-            <p className="text-red-500 text-sm">{error}</p>
-          ) : student ? (
-            <dl className="space-y-3 text-sm">
-              <Row label="Admission Number" value={student.admissionNumber} />
-              <Row label="Name" value={student.fullName} />
-              <Row label="Grade" value={student.grade} />
-              {student.section && <Row label="Section" value={student.section} />}
-              <Row label="Diagnosis" value={student.diagnosis} />
-              <Row label="Communication" value={student.communicationLevel} />
-              <Row
-                label="Shadow Teacher"
-                value={student.assignedTeacher?.name || "Unassigned"}
-              />
-              <Row
-                label="Exam Eligibility"
-                value={ELIGIBILITY_LABEL[student.examEligibility || "pending"]}
-              />
-            </dl>
-          ) : null}
-        </div>
+        {/* My Child — one compact profile bar; full details in a pop-up */}
+        {student ? (
+          <ProfileBanner
+            compact
+            name={student.fullName}
+            lines={[
+              { label: "Admission No", value: student.admissionNumber },
+              {
+                label: "Grade",
+                value: `${student.grade}${student.section ? ` · ${student.section}` : ""}`,
+              },
+              { label: "Shadow Teacher", value: student.assignedTeacher?.name || "Unassigned" },
+              {
+                label: "Exam Eligibility",
+                value: ELIGIBILITY_LABEL[student.examEligibility || "pending"],
+              },
+            ]}
+            actions={
+              <button
+                type="button"
+                onClick={() => setShowProfile(true)}
+                className={BANNER_ACTION_CLASSES}
+              >
+                View Profile
+              </button>
+            }
+          />
+        ) : (
+          <div className="bg-white rounded-md shadow-sm p-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">My Child</h2>
+            {loading ? (
+              <p className="text-gray-400 text-sm">Loading...</p>
+            ) : (
+              <p className="text-red-500 text-sm">{error || "No child linked to this account."}</p>
+            )}
+          </div>
+        )}
 
         <MiniCalendar today={today} />
       </div>
+
+      {student && (
+        <ProfileDetailsModal
+          open={showProfile}
+          onClose={() => setShowProfile(false)}
+          title="Child Profile"
+          sections={[
+            {
+              heading: "Student",
+              rows: [
+                { label: "Full Name", value: student.fullName, wide: true },
+                { label: "Admission No", value: student.admissionNumber },
+                { label: "Branch", value: student.branch },
+                { label: "Grade", value: student.grade },
+                { label: "Section", value: student.section },
+                {
+                  label: "Category",
+                  value:
+                    student.programCategory === "cambridge"
+                      ? "Cambridge"
+                      : student.programCategory === "national"
+                      ? "National"
+                      : "",
+                },
+                {
+                  label: "Date of Birth",
+                  value: student.dateOfBirth
+                    ? new Date(student.dateOfBirth).toLocaleDateString()
+                    : "",
+                },
+                { label: "Gender", value: student.gender, capitalize: true },
+                { label: "Diagnosis", value: student.diagnosis },
+                {
+                  label: "Communication",
+                  value: student.communicationLevel?.replace("-", " "),
+                  capitalize: true,
+                },
+                {
+                  label: "Exam Eligibility",
+                  value: ELIGIBILITY_LABEL[student.examEligibility || "pending"],
+                },
+              ],
+            },
+            {
+              heading: "Shadow Teacher",
+              rows: [
+                { label: "Name", value: student.assignedTeacher?.name || "Unassigned" },
+                { label: "Phone", value: student.assignedTeacher?.phone },
+                { label: "Email", value: student.assignedTeacher?.email, wide: true },
+              ],
+            },
+            {
+              heading: "Parent / Guardian",
+              rows: [
+                { label: "Name", value: student.parentFirstName },
+                { label: "Relationship", value: student.parentRelationship },
+                { label: "Phone", value: student.parentPhone },
+                { label: "Email", value: student.parentEmail },
+                { label: "Address", value: student.homeCity, wide: true },
+              ],
+            },
+          ]}
+        />
+      )}
     </>
   );
 }

@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import {
   GRADE_TAXONOMY,
   UNGROUPED_CATEGORY,
@@ -65,8 +64,6 @@ export default function AdminBranchCategoriesPage({
 
   return (
     <DashboardLayout>
-      <BackButton />
-
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         {branch}
       </h1>

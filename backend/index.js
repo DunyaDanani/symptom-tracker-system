@@ -14,10 +14,73 @@ import doctorDocumentRoutes from "./routes/doctorDocumentRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
 import academicTermRoutes from "./routes/academicTermRoutes.js";
 import { closeBrowser } from "./utils/pdfGenerator.js";
+import mongoose from "mongoose";
+import AcademicTerm from "./models/AcademicTerm.js";
+import TeacherAssignmentRequest, {
+  OPEN_REQUEST_STATUSES,
+} from "./models/TeacherAssignmentRequest.js";
+import Student from "./models/Student.js";
 
 dotenv.config();
 
 connectDB();
+
+// Academic terms used to be unique per (year, term) school-wide; they're
+// now unique per (branch, curriculum, year, term). syncIndexes drops the
+// old index so a second branch can add its own "2026 Term 1".
+mongoose.connection.once("open", async () => {
+  AcademicTerm.syncIndexes().catch((err) =>
+    console.error("Could not sync AcademicTerm indexes:", err.message)
+  );
+
+  // One-off, idempotent data upgrades for the teacher-request flow:
+  //  - requests created before `isOpen` existed get it set from status;
+  //  - students admitted before teacherHistory existed get their current
+  //    teacher recorded, so the teacher keeps a branch on file if the
+  //    student is later moved away from them.
+  try {
+    await TeacherAssignmentRequest.updateMany(
+      { isOpen: { $exists: false } },
+      [{ $set: { isOpen: { $in: ["$status", OPEN_REQUEST_STATUSES] } } }],
+      // Mongoose 9 rejects update pipelines unless explicitly allowed.
+      { updatePipeline: true }
+    );
+    // Older code allowed several open requests for one teacher (one per
+    // admin). Keep the newest and cancel the rest so only one is live.
+    const dupes = await TeacherAssignmentRequest.aggregate([
+      { $match: { status: { $in: OPEN_REQUEST_STATUSES } } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: "$teacher", ids: { $push: "$_id" } } },
+      { $match: { "ids.1": { $exists: true } } },
+    ]);
+    const staleIds = dupes.flatMap((d) => d.ids.slice(1));
+    if (staleIds.length) {
+      await TeacherAssignmentRequest.updateMany(
+        { _id: { $in: staleIds } },
+        { $set: { status: "cancelled", isOpen: false, cancelledAt: new Date() } }
+      );
+      console.log(`Cancelled ${staleIds.length} duplicate teacher request(s).`);
+    }
+    await TeacherAssignmentRequest.syncIndexes();
+    await Student.updateMany(
+      { assignedTeacher: { $ne: null }, "teacherHistory.0": { $exists: false } },
+      [
+        {
+          $set: {
+            teacherHistory: [
+              { teacher: "$assignedTeacher", assignedAt: "$createdAt", removedAt: null },
+            ],
+          },
+        },
+      ],
+      { updatePipeline: true }
+    );
+  } catch (err) {
+    // Most likely cause: two open requests for the same teacher already
+    // exist, so the one-open-request index can't be built. Cancel one.
+    console.error("Teacher-request data upgrade failed:", err.message);
+  }
+});
 
 const app = express();
 

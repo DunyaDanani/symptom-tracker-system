@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import SymptomTrendChart from "@/components/SymptomTrendChart";
-import BackButton from "@/components/BackButton";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
@@ -47,7 +46,7 @@ export default function ReportsContent() {
   const [termTerm, setTermTerm] = useState("");
 
   const { terms: academicTerms, academicYears, currentTerm } =
-    useAcademicTerms();
+    useAcademicTerms(studentId);
 
   useEffect(() => {
     if (!currentTerm) return;

@@ -3,9 +3,9 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
-import Avatar from "@/components/Avatar";
 import { API_BASE } from "@/lib/config";
+import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import ProfileDetailsModal from "@/components/ProfileDetailsModal";
 
 type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 
@@ -14,6 +14,8 @@ interface Student {
   fullName: string;
   grade: string;
   section?: string;
+  admissionNumber?: string;
+  branch?: string;
   communicationLevel: string;
   diagnosis: string;
   flagged?: boolean;
@@ -46,6 +48,7 @@ export default function PrincipalStudentProfilePage({
   const { studentId } = use(params);
 
   const [student, setStudent] = useState<Student | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,24 +91,23 @@ export default function PrincipalStudentProfilePage({
           : undefined
       }
     >
-      <BackButton />
-
       {loading ? (
         <p className="text-gray-400 text-sm mt-2">Loading...</p>
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : student ? (
         <>
-          <div className="flex items-center gap-4 mt-2 mb-6">
-            <Avatar
-              name={student.fullName}
-              size="lg"
-            />
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold text-blue-900">
-                  {student.fullName}
-                </h1>
+          <ProfileBanner
+            className="mt-2 mb-6"
+            name={student.fullName}
+            lines={[
+              { label: "Admission No", value: student.admissionNumber },
+              { label: "Grade", value: student.grade },
+              { label: "Section", value: student.section },
+              { label: "Diagnosis", value: student.diagnosis },
+            ]}
+            badges={
+              <>
                 {student.flagged && (
                   <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
                     Flagged
@@ -116,39 +118,66 @@ export default function PrincipalStudentProfilePage({
                 >
                   {ELIGIBILITY_LABEL[student.examEligibility || "pending"]}
                 </span>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                {student.grade}
-                {student.section ? ` · ${student.section}` : ""} ·{" "}
-                {student.diagnosis}
-              </p>
-            </div>
-          </div>
+              </>
+            }
+            actions={
+              <button
+                type="button"
+                onClick={() => setShowProfile(true)}
+                className={BANNER_ACTION_CLASSES}
+              >
+                View Profile
+              </button>
+            }
+          />
+
+          <ProfileDetailsModal
+            open={showProfile}
+            onClose={() => setShowProfile(false)}
+            title="Student Profile"
+            sections={[
+              {
+                heading: "Student",
+                rows: [
+                  { label: "Full Name", value: student.fullName, wide: true },
+                  { label: "Admission No", value: student.admissionNumber },
+                  { label: "Grade", value: student.grade },
+                  { label: "Section", value: student.section },
+                  { label: "Diagnosis", value: student.diagnosis },
+                  {
+                    label: "Communication",
+                    value: student.communicationLevel?.replace("-", " "),
+                    capitalize: true,
+                  },
+                  {
+                    label: "Exam Eligibility",
+                    value: ELIGIBILITY_LABEL[student.examEligibility || "pending"],
+                  },
+                  { label: "Parent/Guardian", value: student.parentUser?.name },
+                ],
+              },
+              {
+                heading: "Shadow Teacher",
+                rows: [
+                  { label: "Name", value: student.assignedTeacher?.name || "Unassigned" },
+                  { label: "Phone", value: student.assignedTeacher?.phone },
+                  { label: "Email", value: student.assignedTeacher?.email, wide: true },
+                ],
+              },
+            ]}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white rounded-md shadow-sm p-6">
-              <h2 className="text-sm font-semibold text-gray-700 mb-4">
-                Profile
+              <h2 className="text-sm font-semibold text-gray-700 mb-1">
+                Shadow Teacher
               </h2>
-              <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-                <Row label="Grade" value={student.grade} />
-                {student.section && (
-                  <Row label="Section" value={student.section} />
-                )}
-                <Row label="Diagnosis" value={student.diagnosis} />
-                <Row label="Communication" value={student.communicationLevel} />
-                <Row
-                  label="Shadow Teacher"
-                  value={student.assignedTeacher?.name || "Unassigned"}
-                />
-                <Row
-                  label="Parent/Guardian"
-                  value={student.parentUser?.name || "—"}
-                />
-              </dl>
+              <p className="text-sm text-gray-800 font-medium">
+                {student.assignedTeacher?.name || "Unassigned"}
+              </p>
 
               {student.assignedTeacher && (
-                <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-3">
                   <span className="text-xs font-semibold text-gray-400 tracking-wide">
                     Contact Shadow Teacher:
                   </span>
@@ -220,11 +249,3 @@ export default function PrincipalStudentProfilePage({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between border-b border-gray-100 pb-2">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="text-gray-800 font-medium">{value}</dd>
-    </div>
-  );
-}

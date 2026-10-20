@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import SecureContentGate from "@/components/SecureContentGate";
-import BackButton from "@/components/BackButton";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
@@ -164,8 +163,6 @@ function SymptomHistoryContent() {
 export default function ParentSymptomHistoryPage() {
   return (
     <FamilyDashboardLayout role="parent">
-      <BackButton />
-
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
         Symptom History
       </h1>

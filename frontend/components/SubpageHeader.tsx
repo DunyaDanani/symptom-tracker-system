@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import BackButton from "./BackButton";
 
 interface SubpageAction {
   href: string;
@@ -41,11 +40,8 @@ export default function SubpageHeader({
 }: SubpageHeaderProps) {
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-1">
-        <div className="flex items-center gap-2">
-          <BackButton label="" className="p-1 -ml-1 rounded hover:bg-gray-100" />
-          <h1 className="text-2xl font-semibold text-blue-900">{title}</h1>
-        </div>
+      <div className="flex items-center justify-between gap-4 flex-wrap mt-2 mb-1">
+        <h1 className="text-2xl font-semibold text-blue-900">{title}</h1>
         {action && (
           <Link
             href={action.href}

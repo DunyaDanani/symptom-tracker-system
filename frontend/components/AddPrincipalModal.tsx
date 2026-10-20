@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
-import { isValidEmail } from "@/lib/validation";
+import {
+  isValidEmail,
+  isBlank,
+  requiredMessage,
+  errorBorder,
+  INVALID_EMAIL_MESSAGE,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 import { API_BASE } from "@/lib/config";
 
 interface Credentials {
@@ -38,6 +46,9 @@ export default function AddPrincipalModal({
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<
+    FieldErrors<"name" | "branch" | "email">
+  >({});
   const [success, setSuccess] = useState(false);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
   const [emailSent, setEmailSent] = useState(false);
@@ -68,20 +79,14 @@ export default function AddPrincipalModal({
     e.preventDefault();
     setError("");
 
-    if (!name || !branch) {
-      setError("Name and branch are required");
-      return;
-    }
+    const errors: FieldErrors<"name" | "branch" | "email"> = {};
+    if (isBlank(name)) errors.name = requiredMessage("Full Name");
+    if (isBlank(branch)) errors.branch = requiredMessage("Branch");
+    if (isBlank(email)) errors.email = requiredMessage("Email");
+    else if (!isValidEmail(email.trim())) errors.email = INVALID_EMAIL_MESSAGE;
 
-    if (!email.trim()) {
-      setError("Email is required");
-      return;
-    }
-
-    if (!isValidEmail(email.trim())) {
-      setError("Enter a valid email address (e.g. name@example.com)");
-      return;
-    }
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSubmitting(true);
     const token = localStorage.getItem("token");
@@ -126,7 +131,11 @@ export default function AddPrincipalModal({
     setCreatedBranchId("");
     setSuccess(false);
     setError("");
+    setFieldErrors({});
   };
+
+  const clearFieldError = (field: "name" | "branch" | "email") =>
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
 
   const handleClose = () => {
     onClose();
@@ -190,7 +199,7 @@ export default function AddPrincipalModal({
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
           <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -210,20 +219,29 @@ export default function AddPrincipalModal({
           <label className="block text-xs font-medium text-gray-500 mb-1">
             Full Name
           </label>
-          <input
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-4 outline-none focus:border-sky-400"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Nadeesha Perera"
-          />
+          <div className="mb-4">
+            <input
+              className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.name)}`}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                clearFieldError("name");
+              }}
+              placeholder="e.g. Nadeesha Perera"
+            />
+            <FieldError message={fieldErrors.name} />
+          </div>
 
           <label className="block text-xs font-medium text-gray-500 mb-1">
             Branch
           </label>
           <select
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
+            className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.branch)}`}
             value={branch}
-            onChange={(e) => setBranch(e.target.value)}
+            onChange={(e) => {
+              setBranch(e.target.value);
+              clearFieldError("branch");
+            }}
           >
             {branches.map((b) => (
               <option key={b} value={b}>
@@ -231,6 +249,7 @@ export default function AddPrincipalModal({
               </option>
             ))}
           </select>
+          <FieldError message={fieldErrors.branch} />
           <p className="text-xs text-gray-400 mb-6 mt-1 font-mono">
             Branch ID: {branchIdFor(branches, branch) || "—"}
           </p>
@@ -240,13 +259,16 @@ export default function AddPrincipalModal({
           </label>
           <input
             type="email"
-            required
-            className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm mb-1 outline-none focus:border-sky-400"
+            className={`w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400 ${errorBorder(fieldErrors.email)}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError("email");
+            }}
             placeholder="e.g. nadeesha@school.edu"
           />
-          <p className="text-xs text-gray-400 mb-6">
+          <FieldError message={fieldErrors.email} />
+          <p className="text-xs text-gray-400 mt-1 mb-6">
             Used for account recovery and to email login credentials
             directly. Login credentials will also be shown here after you
             confirm.

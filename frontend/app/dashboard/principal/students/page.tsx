@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
-import BackButton from "@/components/BackButton";
 import {
   GRADE_TAXONOMY,
   UNGROUPED_CATEGORY,
@@ -55,7 +54,6 @@ export default function PrincipalStudentsPage() {
 
   return (
     <PrincipalDashboardLayout>
-      <BackButton />
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         Students
       </h1>

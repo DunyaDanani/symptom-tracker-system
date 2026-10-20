@@ -1,12 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import BackButton from "@/components/BackButton";
 import { TERMS, useAcademicTerms, type AcademicTermEntry } from "@/lib/academicTerms";
 import { API_BASE } from "@/lib/config";
+import { PROGRAM_CATEGORIES } from "@/lib/gradeTaxonomy";
+import {
+  isBlank,
+  requiredMessage,
+  errorBorder,
+  FieldErrors,
+} from "@/lib/validation";
+import FieldError from "@/components/FieldError";
 
-const blankForm = () => ({
+const categoryLabel = (value?: string | null) =>
+  PROGRAM_CATEGORIES.find((c) => c.value === value)?.label ?? "";
+
+type FormField =
+  | "branch"
+  | "programCategory"
+  | "academicYear"
+  | "startDate"
+  | "endDate";
+
+const blankForm = (branch = "", programCategory = "") => ({
+  branch,
+  programCategory,
   academicYear: String(new Date().getFullYear()),
   term: TERMS[0] as string,
   startDate: "",
@@ -20,6 +39,32 @@ export default function AdminAcademicTermsPage() {
   const [form, setForm] = useState(blankForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [branches, setBranches] = useState<string[]>([]);
+  // List filters. New terms default to whatever calendar is being viewed,
+  // so an admin setting up "Wattala · Cambridge" doesn't re-pick it each time.
+  const [filterBranch, setFilterBranch] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch(`${API_BASE}/students/branches`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setBranches(data.branches);
+      })
+      .catch((err) => console.error("Failed to load branches", err));
+  }, []);
+
+  const visibleTerms = terms.filter(
+    (t) =>
+      (!filterBranch || t.branch === filterBranch) &&
+      (!filterCategory || t.programCategory === filterCategory)
+  );
+  const unassignedCount = terms.filter(
+    (t) => !t.branch || !t.programCategory
+  ).length;
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -29,39 +74,51 @@ export default function AdminAcademicTermsPage() {
     };
   };
 
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<FormField>>({});
+
   const updateField = (field: keyof ReturnType<typeof blankForm>, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const startEdit = (t: AcademicTermEntry) => {
     setEditingId(t._id);
     setForm({
+      branch: t.branch ?? "",
+      programCategory: t.programCategory ?? "",
       academicYear: t.academicYear,
       term: t.term,
       startDate: t.startDate.slice(0, 10),
       endDate: t.endDate.slice(0, 10),
     });
     setFormError("");
+    setFieldErrors({});
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(blankForm());
+    setForm(blankForm(filterBranch, filterCategory));
     setFormError("");
+    setFieldErrors({});
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
-    if (!form.academicYear.trim() || !form.startDate || !form.endDate) {
-      setFormError("Academic year, start date, and end date are all required.");
-      return;
-    }
-    if (form.startDate >= form.endDate) {
-      setFormError("Start date must be before end date.");
-      return;
-    }
+    const errors: FieldErrors<FormField> = {};
+    if (isBlank(form.branch)) errors.branch = requiredMessage("Branch");
+    if (isBlank(form.programCategory))
+      errors.programCategory = requiredMessage("Category");
+    if (isBlank(form.academicYear)) errors.academicYear = requiredMessage("Academic Year");
+    else if (!/^\d{4}$/.test(form.academicYear.trim()))
+      errors.academicYear = "Academic Year must be a 4-digit year (e.g. 2026)";
+    if (isBlank(form.startDate)) errors.startDate = requiredMessage("Start Date");
+    if (isBlank(form.endDate)) errors.endDate = requiredMessage("End Date");
+    else if (form.startDate && form.startDate >= form.endDate)
+      errors.endDate = "End Date must be after Start Date";
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     setSaving(true);
     try {
@@ -103,7 +160,6 @@ export default function AdminAcademicTermsPage() {
 
   return (
     <DashboardLayout>
-      <BackButton />
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         Academic Terms
       </h1>
@@ -119,7 +175,43 @@ export default function AdminAcademicTermsPage() {
           <h2 className="text-sm font-semibold text-gray-700 mb-4">
             {editingId ? "Edit Term" : "Add Term"}
           </h2>
-          <form onSubmit={submit} className="flex flex-col gap-3">
+          <form onSubmit={submit} noValidate className="flex flex-col gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Branch
+              </label>
+              <select
+                value={form.branch}
+                onChange={(e) => updateField("branch", e.target.value)}
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.branch)}`}
+              >
+                <option value="">Select</option>
+                {branches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <FieldError message={fieldErrors.branch} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                Category
+              </label>
+              <select
+                value={form.programCategory}
+                onChange={(e) => updateField("programCategory", e.target.value)}
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.programCategory)}`}
+              >
+                <option value="">Select</option>
+                {PROGRAM_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <FieldError message={fieldErrors.programCategory} />
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
                 Academic Year
@@ -129,8 +221,9 @@ export default function AdminAcademicTermsPage() {
                 value={form.academicYear}
                 onChange={(e) => updateField("academicYear", e.target.value)}
                 placeholder="e.g. 2026"
-                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.academicYear)}`}
               />
+              <FieldError message={fieldErrors.academicYear} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -156,8 +249,9 @@ export default function AdminAcademicTermsPage() {
                 type="date"
                 value={form.startDate}
                 onChange={(e) => updateField("startDate", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.startDate)}`}
               />
+              <FieldError message={fieldErrors.startDate} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -167,8 +261,9 @@ export default function AdminAcademicTermsPage() {
                 type="date"
                 value={form.endDate}
                 onChange={(e) => updateField("endDate", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.endDate)}`}
               />
+              <FieldError message={fieldErrors.endDate} />
             </div>
 
             {formError && <p className="text-xs text-red-500">{formError}</p>}
@@ -195,22 +290,79 @@ export default function AdminAcademicTermsPage() {
         </div>
 
         {/* List */}
-        <div className="bg-white rounded-md shadow-sm overflow-hidden lg:col-span-2">
-          <h2 className="text-sm font-semibold text-gray-700 p-6 pb-0">
-            Configured Terms
-          </h2>
+        <div className="bg-white rounded-md shadow-sm overflow-x-auto lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-0">
+            <h2 className="text-sm font-semibold text-gray-700">
+              Configured Terms
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={filterBranch}
+                onChange={(e) => {
+                  setFilterBranch(e.target.value);
+                  if (!editingId)
+                    setForm((prev) => ({ ...prev, branch: e.target.value }));
+                }}
+                className="text-sm border border-gray-200 rounded-md px-3 py-1.5 outline-none focus:border-blue-400"
+                aria-label="Filter by branch"
+              >
+                <option value="">All branches</option>
+                {branches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filterCategory}
+                onChange={(e) => {
+                  setFilterCategory(e.target.value);
+                  if (!editingId)
+                    setForm((prev) => ({
+                      ...prev,
+                      programCategory: e.target.value,
+                    }));
+                }}
+                className="text-sm border border-gray-200 rounded-md px-3 py-1.5 outline-none focus:border-blue-400"
+                aria-label="Filter by category"
+              >
+                <option value="">National &amp; Cambridge</option>
+                {PROGRAM_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {unassignedCount > 0 && (
+            <p className="mx-6 mt-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              {unassignedCount} term{unassignedCount === 1 ? " was" : "s were"}{" "}
+              created before calendars were split by branch and category.
+              They still apply to students whose own calendar isn&apos;t set
+              up yet. Edit each one to assign a branch and category.
+            </p>
+          )}
           {loading ? (
             <p className="px-6 py-4 text-sm text-gray-400">Loading...</p>
           ) : error ? (
             <p className="px-6 py-4 text-sm text-red-500">{error}</p>
-          ) : terms.length === 0 ? (
+          ) : visibleTerms.length === 0 ? (
             <p className="px-6 py-4 text-sm text-gray-400">
-              No terms configured yet — add the first one to the left.
+              {terms.length === 0
+                ? "No terms configured yet — add the first one to the left."
+                : "No terms for this branch and category yet — add one to the left."}
             </p>
           ) : (
             <table className="w-full text-sm mt-4">
               <thead>
                 <tr className="border-b border-gray-100 text-left">
+                  <th className="px-6 py-3 font-semibold text-gray-700">
+                    Branch
+                  </th>
+                  <th className="px-6 py-3 font-semibold text-gray-700">
+                    Category
+                  </th>
                   <th className="px-6 py-3 font-semibold text-gray-700">
                     Academic Year
                   </th>
@@ -227,15 +379,27 @@ export default function AdminAcademicTermsPage() {
                 </tr>
               </thead>
               <tbody>
-                {terms.map((t) => (
+                {visibleTerms.map((t) => (
                   <tr key={t._id} className="border-b border-gray-50">
+                    {t.branch && t.programCategory ? (
+                      <>
+                        <td className="px-6 py-3 text-gray-800">{t.branch}</td>
+                        <td className="px-6 py-3 text-gray-800">
+                          {categoryLabel(t.programCategory)}
+                        </td>
+                      </>
+                    ) : (
+                      <td colSpan={2} className="px-6 py-3 text-amber-700 text-xs">
+                        Unassigned — edit to set branch &amp; category
+                      </td>
+                    )}
                     <td className="px-6 py-3 text-gray-800">{t.academicYear}</td>
                     <td className="px-6 py-3 text-gray-800">{t.term}</td>
                     <td className="px-6 py-3 text-gray-600 whitespace-nowrap">
-                      {new Date(t.startDate).toLocaleDateString()}
+                      {new Date(t.startDate).toLocaleDateString(undefined, { timeZone: "UTC" })}
                     </td>
                     <td className="px-6 py-3 text-gray-600 whitespace-nowrap">
-                      {new Date(t.endDate).toLocaleDateString()}
+                      {new Date(t.endDate).toLocaleDateString(undefined, { timeZone: "UTC" })}
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-3 justify-end">

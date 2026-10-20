@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
-import BackButton from "@/components/BackButton";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
@@ -124,7 +123,6 @@ export default function ParentDoctorDocumentsPage() {
 
   return (
     <FamilyDashboardLayout role="parent">
-      <BackButton />
       <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
         Doctor&apos;s Recommendation
       </h1>
