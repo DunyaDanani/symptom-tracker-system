@@ -9,6 +9,7 @@ import {
   getSentMessages,
   getUnreadCount,
   downloadAttachment,
+  getUnreadPreview,
 } from "../controllers/messageController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { documentFileFilter, runUpload } from "../utils/uploadFileFilter.js";
@@ -35,6 +36,7 @@ router.get("/recipients", getRecipients);
 router.get("/inbox", getInbox);
 router.get("/sent", getSentMessages);
 router.get("/unread-count", getUnreadCount);
+router.get("/unread-preview", getUnreadPreview);
 router.get("/:id/attachment", downloadAttachment);
 router.post("/", runUpload(upload.single("attachment")), sendMessage);
 

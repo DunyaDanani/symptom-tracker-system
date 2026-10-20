@@ -9,6 +9,7 @@ import { API_BASE } from "@/lib/config";
 import LoadingSkeleton from "@/components/Skeleton";
 import ScoreNote from "@/components/ScoreNote";
 import Pagination, { usePager, paginate } from "@/components/Pagination";
+import { activityCardColor } from "@/lib/activityCards";
 
 interface ActivityCard {
   key: string;
@@ -188,7 +189,7 @@ function EmotionHistoryContent() {
             {planCards.map((card) => (
               <div
                 key={card.key}
-                className={`rounded-md p-4 flex items-start gap-3 ${card.color}`}
+                className={`rounded-md p-4 flex items-start gap-3 ${activityCardColor(card.category)}`}
               >
                 <span className="text-2xl leading-none">{card.icon}</span>
                 <div className="min-w-0">

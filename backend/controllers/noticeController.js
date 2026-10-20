@@ -1,3 +1,4 @@
+import User from "../models/User.js";
 import Notice from "../models/Notice.js";
 
 // @route   POST /api/notices
@@ -49,6 +50,11 @@ export const getNotices = async (req, res) => {
       .populate("postedBy", "name")
       .sort({ createdAt: -1 });
 
+    // Opening the notice board marks every notice as seen for the bell.
+    User.updateOne({ _id: req.user.id }, { $set: { noticesSeenAt: new Date() } }).catch(
+      (err) => console.error("Failed to mark notices seen", err)
+    );
+
     res.json({
       success: true,
       notices,
@@ -98,5 +104,32 @@ export const deleteNotice = async (req, res) => {
       success: false,
       message: "Server Error",
     });
+  }
+};
+
+
+// @route   GET /api/notices/unread
+// @access  Any authenticated user
+// Notices posted (by someone else) since this user last opened the notice
+// board — the count + the newest few, for the header bell.
+export const getUnreadNotices = async (req, res) => {
+  try {
+    const me = await User.findById(req.user.id).select("noticesSeenAt");
+    const filter = { postedBy: { $ne: req.user.id } };
+    if (me?.noticesSeenAt) filter.createdAt = { $gt: me.noticesSeenAt };
+
+    const [count, latest] = await Promise.all([
+      Notice.countDocuments(filter),
+      Notice.find(filter)
+        .select("title createdAt postedBy")
+        .populate("postedBy", "name")
+        .sort({ createdAt: -1 })
+        .limit(3),
+    ]);
+
+    res.json({ success: true, count, latest });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };

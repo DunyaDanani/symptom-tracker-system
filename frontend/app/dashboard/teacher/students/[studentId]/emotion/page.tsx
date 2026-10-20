@@ -8,6 +8,7 @@ import EmotionCheckinModal from "@/components/EmotionCheckinModal";
 import { API_BASE } from "@/lib/config";
 import LoadingSkeleton from "@/components/Skeleton";
 import { formatText } from "@/lib/format";
+import { activityCardColor } from "@/lib/activityCards";
 interface StudentSummary {
   _id: string;
   fullName: string;
@@ -205,14 +206,15 @@ export default function TeacherEmotionTrackerPage({
           {activityPlan && (
             <div className="bg-white rounded-md shadow-sm p-6">
               <h2 className="text-sm font-semibold text-gray-700 mb-1">
-                Suggested Activities
+                Last Check-in Suggested Activities
               </h2>
               <p className="text-sm text-gray-500 mb-4">
-                Personalised for {student?.fullName?.split(" ")[0] || "the child"} by
-                analysing today&apos;s emotion check-in — how they said they felt
+                Personalised for{" "}
+                {student?.fullName?.split(" ")[0] || "the child"} by analysing
+                the last emotion check-in — how they said they felt
                 and how you saw them — together with their diagnosis
                 {diagnosis ? ` (${formatText(diagnosis)})` : ""} and any symptoms
-                logged today. One creative (aesthetic), one social and one
+                logged that day. One creative (aesthetic), one social and one
                 academic activity.
               </p>
               <ActivityCardGrid cards={activityPlan.cards} />
@@ -242,7 +244,7 @@ function ActivityCardGrid({ cards }: { cards: ActivityCard[] }) {
       {cards.map((card) => (
         <div
           key={card.key}
-          className={`rounded-md p-4 flex items-start gap-3 ${card.color}`}
+          className={`rounded-md p-4 flex items-start gap-3 ${activityCardColor(card.category)}`}
         >
           <span className="text-2xl leading-none">{card.icon}</span>
           <div>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
-import NotificationBell from "./NotificationBell";
+import NotificationsBell from "./NotificationsBell";
 import UserMenu from "./UserMenu";
 import Breadcrumbs from "./Breadcrumbs";
 import { API_BASE } from "@/lib/config";
@@ -180,7 +180,7 @@ export default function TeacherDashboardLayout({
               Communication
             </Link>
 
-            <NotificationBell messagesHref="/dashboard/teacher/messages" />
+            <NotificationsBell basePath="/dashboard/teacher" alertsHref="/dashboard/teacher/students" />
 
             <UserMenu
               name={userName}

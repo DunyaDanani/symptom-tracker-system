@@ -392,3 +392,37 @@ export const getUnreadCount = async (req, res) => {
     });
   }
 };
+
+
+// @route   GET /api/messages/unread-preview
+// @access  Any authenticated user
+// The unread count + the newest few unread messages (sender, category,
+// first words) for the header bell. Unlike /inbox, this does NOT mark them
+// as read.
+export const getUnreadPreview = async (req, res) => {
+  try {
+    const filter = { recipient: req.user.id, read: false };
+    const [count, latest] = await Promise.all([
+      Message.countDocuments(filter),
+      Message.find(filter)
+        .select("sender category body createdAt")
+        .populate("sender", "name")
+        .sort({ createdAt: -1 })
+        .limit(3),
+    ]);
+    res.json({
+      success: true,
+      count,
+      latest: latest.map((m) => ({
+        _id: m._id,
+        sender: m.sender?.name || "Someone",
+        category: m.category,
+        preview: m.body.length > 90 ? `${m.body.slice(0, 90)}…` : m.body,
+        createdAt: m.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};

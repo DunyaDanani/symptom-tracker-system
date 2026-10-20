@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import { API_BASE } from "@/lib/config";
 import { toast } from "@/lib/toast";
+import { activityCardColor } from "@/lib/activityCards";
 
 interface EmotionCheckinModalProps {
   open: boolean;
@@ -204,7 +205,7 @@ export default function EmotionCheckinModal({
             {activityPlan.cards.map((card) => (
               <div
                 key={card.key}
-                className={`rounded-md p-4 flex items-start gap-3 ${card.color}`}
+                className={`rounded-md p-4 flex items-start gap-3 ${activityCardColor(card.category)}`}
               >
                 <span className="text-2xl leading-none">{card.icon}</span>
                 <div>

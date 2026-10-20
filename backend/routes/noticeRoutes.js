@@ -3,6 +3,7 @@ import {
   createNotice,
   getNotices,
   deleteNotice,
+  getUnreadNotices,
 } from "../controllers/noticeController.js";
 import { protect, authorizeRoles } from "../middleware/authMiddleware.js";
 
@@ -10,6 +11,7 @@ const router = express.Router();
 
 // Every authenticated role reads the same feed.
 router.get("/", protect, getNotices);
+router.get("/unread", protect, getUnreadNotices);
 
 // Only Admin and Principal can post or remove notices.
 router.post("/", protect, authorizeRoles("admin", "principal"), createNotice);

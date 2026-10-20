@@ -6,7 +6,7 @@ import SubpageHeader from "@/components/SubpageHeader";
 import { API_BASE } from "@/lib/config";
 import LoadingSkeleton from "@/components/Skeleton";
 import { toast } from "@/lib/toast";
-import { BTN_SECONDARY, BTN_DANGER_OUTLINE } from "@/lib/ui";
+import { BTN_SECONDARY, BTN_DANGER_OUTLINE, BTN_SUCCESS } from "@/lib/ui";
 
 interface StudentSummary {
   _id: string;
@@ -20,6 +20,10 @@ interface MedicationEntry {
   name: string;
   dosage?: string;
   time?: string;
+  // Screen-only: true once the teacher presses "Confirm medication" (the
+  // row then shows as a summary). Never sent to the server.
+  confirmed?: boolean;
+  nameError?: string;
 }
 
 // Symptom logging only — the "+ Log Symptom" flow. Viewing past logs
@@ -100,13 +104,39 @@ export default function TeacherLogSymptomsPage({
     setMedications((prev) => [...prev, { name: "", dosage: "", time: "" }]);
   };
 
+  // A row being filled in must be confirmed (or removed) before another is
+  // added or the log is saved, so nothing half-typed is saved by accident.
+  const hasUnconfirmed = medications.some((m) => !m.confirmed);
+
+  const confirmMedicationRow = (index: number) => {
+    setMedications((prev) =>
+      prev.map((m, i) =>
+        i !== index
+          ? m
+          : m.name.trim()
+          ? { ...m, name: m.name.trim(), confirmed: true, nameError: undefined }
+          : { ...m, nameError: "Medication name is required" }
+      )
+    );
+  };
+
+  const editMedicationRow = (index: number) => {
+    setMedications((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, confirmed: false } : m))
+    );
+  };
+
   const updateMedicationRow = (
     index: number,
     field: keyof MedicationEntry,
     value: string
   ) => {
     setMedications((prev) =>
-      prev.map((m, i) => (i === index ? { ...m, [field]: value } : m))
+      prev.map((m, i) =>
+        i === index
+          ? { ...m, [field]: value, ...(field === "name" ? { nameError: undefined } : {}) }
+          : m
+      )
     );
   };
 
@@ -122,6 +152,10 @@ export default function TeacherLogSymptomsPage({
       setStatus("Select at least one symptom.");
       return;
     }
+    if (hasUnconfirmed) {
+      setStatus("Confirm or remove the medication you're adding before saving.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -135,7 +169,9 @@ export default function TeacherLogSymptomsPage({
           studentId,
           symptoms: selectedSymptoms,
           additionalNotes: notes,
-          medications: medications.filter((m) => m.name.trim()),
+          medications: medications
+            .filter((m) => m.confirmed && m.name.trim())
+            .map(({ name, dosage, time }) => ({ name, dosage, time })),
           medicationNotes,
         }),
       });
@@ -236,6 +272,8 @@ export default function TeacherLogSymptomsPage({
                   <button
                     type="button"
                     onClick={addMedicationRow}
+                    disabled={hasUnconfirmed}
+                    title={hasUnconfirmed ? "Confirm the medication you're adding first" : undefined}
                     className={BTN_SECONDARY}
                   >
                     + Add medication
@@ -252,9 +290,43 @@ export default function TeacherLogSymptomsPage({
                 ) : (
                   <div className="flex flex-col gap-3 mb-4">
                     {medications.map((m, i) => (
+                      m.confirmed ? (
+                        <div
+                          key={i}
+                          className="border border-gray-100 rounded-md px-3 py-2 flex items-center justify-between gap-3 flex-wrap"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-800">
+                              <span className="text-emerald-600 mr-1">✓</span>
+                              {m.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {[m.dosage && `Dosage: ${m.dosage}`, m.time && `Time: ${m.time}`]
+                                .filter(Boolean)
+                                .join(" · ") || "No dosage or time given"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => editMedicationRow(i)}
+                              className={BTN_SECONDARY}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeMedicationRow(i)}
+                              className={BTN_DANGER_OUTLINE}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
                       <div
                         key={i}
-                        className="border border-gray-100 rounded-md p-3"
+                        className="border border-blue-100 bg-blue-50/30 rounded-md p-3"
                       >
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs font-medium text-gray-500">
@@ -275,8 +347,13 @@ export default function TeacherLogSymptomsPage({
                             updateMedicationRow(i, "name", e.target.value)
                           }
                           placeholder="Name"
-                          className="w-full text-sm border border-gray-200 rounded-md p-2 mb-2 outline-none focus:border-blue-400"
+                          className={`w-full text-sm border rounded-md p-2 outline-none focus:border-blue-400 ${m.nameError ? "border-red-400" : "border-gray-200"}`}
                         />
+                        {m.nameError ? (
+                          <p className="text-xs text-red-500 mt-1 mb-2">{m.nameError}</p>
+                        ) : (
+                          <div className="mb-2" />
+                        )}
                         <div className="grid grid-cols-2 gap-2">
                           <input
                             type="text"
@@ -297,7 +374,17 @@ export default function TeacherLogSymptomsPage({
                             className="text-sm border border-gray-200 rounded-md p-2 outline-none focus:border-blue-400"
                           />
                         </div>
+                        <div className="flex justify-end mt-3">
+                          <button
+                            type="button"
+                            onClick={() => confirmMedicationRow(i)}
+                            className={BTN_SUCCESS}
+                          >
+                            ✓ Confirm medication
+                          </button>
+                        </div>
                       </div>
+                      )
                     ))}
                   </div>
                 )}

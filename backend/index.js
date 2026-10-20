@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import cors from "cors";
 import dotenv from "dotenv";
 
@@ -13,6 +14,7 @@ import studyModuleRoutes from "./routes/studyModuleRoutes.js";
 import doctorDocumentRoutes from "./routes/doctorDocumentRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
 import academicTermRoutes from "./routes/academicTermRoutes.js";
+import alertRoutes from "./routes/alertRoutes.js";
 import { closeBrowser } from "./utils/pdfGenerator.js";
 import mongoose from "mongoose";
 import AcademicTerm from "./models/AcademicTerm.js";
@@ -22,6 +24,13 @@ import TeacherAssignmentRequest, {
 import Student from "./models/Student.js";
 
 dotenv.config();
+
+// Uploaded files (study modules, past papers, doctor documents, message
+// attachments) are saved to ./uploads. That folder is git-ignored, so a
+// fresh clone doesn't have it, and multer can't create it because each
+// route passes its destination as a function. Without this, every upload
+// on a new machine fails with "ENOENT: no such file or directory".
+fs.mkdirSync("uploads", { recursive: true });
 
 connectDB();
 
@@ -133,6 +142,7 @@ app.use("/api/study-modules", studyModuleRoutes);
 app.use("/api/doctor-documents", doctorDocumentRoutes);
 app.use("/api/notices", noticeRoutes);
 app.use("/api/academic-terms", academicTermRoutes);
+app.use("/api/alerts", alertRoutes);
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
-import NotificationBell from "./NotificationBell";
+import NotificationsBell from "./NotificationsBell";
 import UserMenu from "./UserMenu";
 import { API_BASE } from "@/lib/config";
 import Breadcrumbs from "./Breadcrumbs";
@@ -175,7 +175,7 @@ export default function FamilyDashboardLayout({
                   Communication
                 </Link>
 
-                <NotificationBell messagesHref={`${basePath}/messages`} />
+                <NotificationsBell basePath={basePath} />
               </>
             )}
 

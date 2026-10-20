@@ -322,92 +322,89 @@ export default function TeacherStudentHubPage({
             </div>
           </Modal>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main column */}
-            <div className="lg:col-span-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Link
-                  href={`/dashboard/teacher/students/${studentId}/symptoms/history`}
-                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
-                >
-                  <p className="font-semibold text-gray-800">Symptom History</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    View logged symptoms over time
-                  </p>
-                </Link>
+          {/* Section 1 — the child's records, each its own clear tile */}
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Student records
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <RecordTile
+              href={`/dashboard/teacher/students/${studentId}/symptoms/history`}
+              title="Symptom History"
+              description="Symptoms and medication you've logged, with dates and notes."
+              tint="bg-rose-50 text-rose-600"
+              icon={<path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />}
+            />
+            <RecordTile
+              href={`/dashboard/teacher/students/${studentId}/emotion/history`}
+              title="Emotion History"
+              description="Past emotion check-ins, scores and the suggested activities."
+              tint="bg-amber-50 text-amber-600"
+              icon={<path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />}
+            />
+            <RecordTile
+              href={`/dashboard/teacher/students/${studentId}/doctor-documents`}
+              title="Doctor's Recommendation"
+              description="Documents from the child's doctor and their review status."
+              tint="bg-sky-50 text-sky-600"
+              icon={<path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />}
+            />
+          </div>
 
-                <Link
-                  href={`/dashboard/teacher/students/${studentId}/emotion/history`}
-                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
-                >
-                  <p className="font-semibold text-gray-800">Emotion History</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    View emotion check-ins over time
-                  </p>
-                </Link>
-
-                <Link
-                  href={`/dashboard/teacher/students/${studentId}/doctor-documents`}
-                  className="bg-white rounded-md shadow-sm p-6 hover:shadow-md transition-shadow"
-                >
-                  <p className="font-semibold text-gray-800">
-                    Doctor&apos;s Recommendation
-                  </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    View uploaded documents and review status
-                  </p>
-                </Link>
-              </div>
+          {/* Section 2 — flagging, separate so it isn't mistaken for a record */}
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Flag for the principal&apos;s attention
+          </h2>
+          <div
+            className={`bg-white rounded-md shadow-sm p-6 border-l-4 ${
+              student?.flagged ? "border-red-500" : "border-gray-200"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+              <p className="text-sm text-gray-600 max-w-2xl">
+                {student?.flagged
+                  ? "This student is currently flagged. The branch principal can see it on their Needs Attention list. Clear the flag once the concern is resolved."
+                  : "Raise a concern you want the branch principal to look at. It appears on their Needs Attention list and in their alerts."}
+              </p>
+              <span
+                className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+                  student?.flagged ? "text-red-600 bg-red-50" : "text-gray-500 bg-gray-100"
+                }`}
+              >
+                {student?.flagged ? "Flagged" : "Not flagged"}
+              </span>
             </div>
-
-            {/* Sidebar column */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-md shadow-sm p-6 lg:sticky lg:top-6">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-semibold text-gray-700">
-                    Needs Attention Flag
-                  </p>
-                  {student?.flagged && (
-                    <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                      Flagged
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={flagReason}
-                  onChange={(e) => setFlagReason(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-md p-2 mb-2 outline-none focus:border-blue-400"
-                >
-                  <option value="">Select a reason (optional)</option>
-                  {FLAG_REASONS.map((reason) => (
-                    <option key={reason} value={reason}>
-                      {reason}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  value={flagNote}
-                  onChange={(e) => setFlagNote(e.target.value)}
-                  placeholder="Further clarification for the principal (optional)"
-                  rows={2}
-                  className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 outline-none focus:border-blue-400"
-                />
-                <button
-                  onClick={toggleFlag}
-                  disabled={savingFlag}
-                  className={`w-full text-sm font-medium px-5 py-2.5 rounded transition-colors disabled:opacity-60 ${
-                    student?.flagged
-                      ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      : "bg-red-600 text-white hover:bg-red-700"
-                  }`}
-                >
-                  {savingFlag
-                    ? "Saving..."
-                    : student?.flagged
-                    ? "Clear Flag"
-                    : "Flag for Attention"}
-                </button>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-[16rem_1fr_auto] gap-3 items-start">
+              <select
+                value={flagReason}
+                onChange={(e) => setFlagReason(e.target.value)}
+                aria-label="Reason"
+                className="w-full min-h-10 text-sm border border-gray-200 rounded px-3 outline-none focus:border-blue-400 bg-white"
+              >
+                <option value="">Select a reason (optional)</option>
+                {FLAG_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={flagNote}
+                onChange={(e) => setFlagNote(e.target.value)}
+                placeholder="Further clarification for the principal (optional)"
+                rows={2}
+                className="w-full text-sm border border-gray-200 rounded px-3 py-2 outline-none focus:border-blue-400"
+              />
+              <button
+                onClick={toggleFlag}
+                disabled={savingFlag}
+                className={student?.flagged ? BTN_SECONDARY : BTN_DANGER}
+              >
+                {savingFlag
+                  ? "Saving..."
+                  : student?.flagged
+                  ? "Clear Flag"
+                  : "Flag for Attention"}
+              </button>
             </div>
           </div>
 
@@ -489,5 +486,37 @@ function ProfileRow({
         {value}
       </dd>
     </div>
+  );
+}
+
+// One of the child's record pages, shown as a tile with its own icon and
+// colour so the three are easy to tell apart at a glance.
+function RecordTile({
+  href,
+  title,
+  description,
+  tint,
+  icon,
+}: {
+  href: string;
+  title: string;
+  description: string;
+  tint: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group bg-white rounded-md shadow-sm p-6 flex flex-col h-full border border-transparent hover:border-blue-200 hover:shadow-md transition"
+    >
+      <span className={`w-11 h-11 rounded-full flex items-center justify-center ${tint}`}>
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+          {icon}
+        </svg>
+      </span>
+      <p className="font-semibold text-gray-800 mt-4">{title}</p>
+      <p className="text-sm text-gray-500 mt-1 flex-1">{description}</p>
+      <p className="text-sm font-medium text-blue-700 mt-4 group-hover:underline">Open →</p>
+    </Link>
   );
 }

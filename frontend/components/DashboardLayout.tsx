@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
-import AlertsNotificationsBell from "./AlertsNotificationsBell";
+import NotificationsBell from "./NotificationsBell";
 import UserMenu from "./UserMenu";
 import Breadcrumbs from "./Breadcrumbs";
 
@@ -126,7 +126,7 @@ export default function DashboardLayout({
             Communication
           </Link>
 
-          <AlertsNotificationsBell messagesHref="/dashboard/admin/messages" />
+          <NotificationsBell basePath="/dashboard/admin" alertsHref="/dashboard/admin/alerts" />
 
           <UserMenu
             name={userName}

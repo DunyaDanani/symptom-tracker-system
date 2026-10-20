@@ -73,6 +73,13 @@ const userSchema = new mongoose.Schema(
     // Recovery email for staff accounts (admin, principal, shadow_teacher).
     // Parent/child accounts don't use this — their recovery routes through
     // Student.parentEmail instead, since a child has no email of their own.
+    // When this user last opened the Notice board — notices posted after
+    // it count as new in the header bell.
+    noticesSeenAt: {
+      type: Date,
+      default: null,
+    },
+
     email: {
       type: String,
       trim: true,

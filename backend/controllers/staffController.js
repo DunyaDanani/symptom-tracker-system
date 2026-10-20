@@ -400,3 +400,40 @@ export const acknowledgeAlert = async (req, res) => {
     });
   }
 };
+
+
+// @route   GET /api/alerts/mine
+// @access  Any signed-in role. Open (not yet dismissed) alerts the user is
+// allowed to see, for the header bell:
+//   admin / cao      -> every student
+//   principal        -> students in their branch
+//   class_teacher    -> students in their branch
+//   shadow_teacher   -> students assigned to them
+//   parent           -> their own child
+export const getMyAlerts = async (req, res) => {
+  try {
+    const { role, id, branch } = req.user;
+    let studentFilter = null;
+    if (role === "principal" || role === "class_teacher") studentFilter = { branch };
+    else if (role === "shadow_teacher") studentFilter = { assignedTeacher: id };
+    else if (role === "parent") studentFilter = { parentUser: id };
+    else if (role !== "admin" && role !== "cao") {
+      return res.json({ success: true, alerts: [], canDismiss: false });
+    }
+
+    const filter = { acknowledged: false };
+    if (studentFilter) {
+      filter.student = { $in: await Student.find(studentFilter).distinct("_id") };
+    }
+
+    const alerts = await Alert.find(filter)
+      .populate("student", "fullName grade section branch")
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    res.json({ success: true, alerts, canDismiss: role === "admin" || role === "cao" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
