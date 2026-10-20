@@ -40,6 +40,19 @@ const findOverlappingTerm = (scope, startDate, endDate, excludeId = null) => {
   return AcademicTerm.findOne(query);
 };
 
+// The same term may be set up only once per calendar: one "Term 1 2026"
+// for Wattala · National, one for Wattala · Cambridge, and so on. Checked
+// explicitly (case/space-insensitive year) as well as by the unique index,
+// so a duplicate is refused even if the index hasn't been built yet.
+const findDuplicateTerm = (scope, academicYear, term, excludeId = null) => {
+  const query = { ...scope, academicYear: String(academicYear).trim(), term };
+  if (excludeId) query._id = { $ne: excludeId };
+  return AcademicTerm.findOne(query);
+};
+
+const duplicateMessage = (term, academicYear, branch, programCategory) =>
+  `${term} ${academicYear} is already set up for ${branch} (${CATEGORY_LABEL[programCategory] || programCategory}). Edit the existing term instead of adding another.`;
+
 const formatDay = (date) => new Date(date).toISOString().slice(0, 10);
 
 const overlapMessage = (other) =>
@@ -161,6 +174,18 @@ export const createAcademicTerm = async (req, res) => {
       });
     }
 
+    const duplicate = await findDuplicateTerm(
+      scopeOf(branch, programCategory),
+      academicYear,
+      term
+    );
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        message: duplicateMessage(term, academicYear.trim(), branch, programCategory),
+      });
+    }
+
     const overlapping = await findOverlappingTerm(
       scopeOf(branch, programCategory),
       startDate,
@@ -264,6 +289,24 @@ export const updateAcademicTerm = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Start date must be before end date",
+      });
+    }
+
+    const duplicate = await findDuplicateTerm(
+      scopeOf(academicTerm.branch, academicTerm.programCategory),
+      academicTerm.academicYear,
+      academicTerm.term,
+      academicTerm._id
+    );
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        message: duplicateMessage(
+          academicTerm.term,
+          academicTerm.academicYear,
+          academicTerm.branch,
+          academicTerm.programCategory
+        ),
       });
     }
 

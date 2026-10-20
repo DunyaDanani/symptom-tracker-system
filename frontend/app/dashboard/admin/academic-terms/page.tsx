@@ -23,6 +23,7 @@ type FormField =
   | "branch"
   | "programCategory"
   | "academicYear"
+  | "term"
   | "startDate"
   | "endDate";
 
@@ -79,6 +80,21 @@ export default function AdminAcademicTermsPage() {
 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors<FormField>>({});
 
+  // Terms already set up for the branch + category + year being filled in
+  // (ignoring the term being edited) — each may exist only once, so they're
+  // disabled in the Term dropdown and refused on save.
+  const takenTerms = new Set(
+    terms
+      .filter(
+        (t) =>
+          t._id !== editingId &&
+          t.branch === form.branch &&
+          t.programCategory === form.programCategory &&
+          t.academicYear.trim() === form.academicYear.trim()
+      )
+      .map((t) => t.term as string)
+  );
+
   const updateField = (field: keyof ReturnType<typeof blankForm>, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
@@ -116,6 +132,8 @@ export default function AdminAcademicTermsPage() {
     if (isBlank(form.academicYear)) errors.academicYear = requiredMessage("Academic Year");
     else if (!/^\d{4}$/.test(form.academicYear.trim()))
       errors.academicYear = "Academic Year must be a 4-digit year (e.g. 2026)";
+    if (takenTerms.has(form.term))
+      errors.term = `${form.term} ${form.academicYear.trim()} is already added for this branch and category — edit it in the list instead`;
     if (isBlank(form.startDate)) errors.startDate = requiredMessage("Start Date");
     if (isBlank(form.endDate)) errors.endDate = requiredMessage("End Date");
     else if (form.startDate && form.startDate >= form.endDate)
@@ -249,14 +267,16 @@ export default function AdminAcademicTermsPage() {
               <select
                 value={form.term}
                 onChange={(e) => updateField("term", e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400"
+                className={`w-full text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 ${errorBorder(fieldErrors.term)}`}
               >
                 {TERMS.map((t) => (
-                  <option key={t} value={t}>
+                  <option key={t} value={t} disabled={takenTerms.has(t)}>
                     {t}
+                    {takenTerms.has(t) ? " (already added)" : ""}
                   </option>
                 ))}
               </select>
+              <FieldError message={fieldErrors.term} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">

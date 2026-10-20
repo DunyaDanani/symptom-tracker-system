@@ -2,10 +2,12 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import Modal from "@/components/Modal";
 import { API_BASE } from "@/lib/config";
-import { BTN_SECONDARY } from "@/lib/ui";
+import { BTN_SECONDARY, BTN_DANGER, BTN_DANGER_OUTLINE } from "@/lib/ui";
+import FieldError from "@/components/FieldError";
 import LoadingSkeleton from "@/components/Skeleton";
 import { toast } from "@/lib/toast";
 import { formatCommunication, formatText } from "@/lib/format";
@@ -55,6 +57,61 @@ export default function TeacherStudentHubPage({
   const [flagNote, setFlagNote] = useState("");
   const [savingFlag, setSavingFlag] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // "Remove student" — the child is leaving the school, or the parents
+  // asked for a different shadow teacher.
+  const router = useRouter();
+  const [isShadowTeacher, setIsShadowTeacher] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only value
+    setIsShadowTeacher(localStorage.getItem("role") === "shadow_teacher");
+  }, []);
+  const [showRelease, setShowRelease] = useState(false);
+  const [releaseReason, setReleaseReason] = useState("");
+  const [releaseNote, setReleaseNote] = useState("");
+  const [releaseErrors, setReleaseErrors] = useState<{ reason?: string; note?: string }>({});
+  const [releasing, setReleasing] = useState(false);
+
+  const closeRelease = () => {
+    setShowRelease(false);
+    setReleaseReason("");
+    setReleaseNote("");
+    setReleaseErrors({});
+  };
+
+  const submitRelease = async () => {
+    const errors: { reason?: string; note?: string } = {};
+    if (!releaseReason) errors.reason = "Reason is required";
+    if (releaseReason === "other" && !releaseNote.trim())
+      errors.note = "Please explain the reason";
+    setReleaseErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setReleasing(true);
+    try {
+      const res = await fetch(`${API_BASE}/teacher/students/${studentId}/release`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reason: releaseReason, note: releaseNote }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast.error(data.message || "Could not remove the student");
+        return;
+      }
+      toast.success(data.message || "Student removed");
+      closeRelease();
+      router.push("/dashboard/teacher/students");
+    } catch (err) {
+      console.error("Failed to remove student", err);
+      toast.error("Unable to reach the server");
+    } finally {
+      setReleasing(false);
+    }
+  };
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -169,14 +226,101 @@ export default function TeacherStudentHubPage({
                 {student?.diagnosis ? ` · ${formatText(student.diagnosis)}` : ""}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className={BTN_SECONDARY}
-            >
-              View Profile
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className={BTN_SECONDARY}
+              >
+                View Profile
+              </button>
+              {isShadowTeacher && (
+                <button
+                  type="button"
+                  onClick={() => setShowRelease(true)}
+                  className={BTN_DANGER_OUTLINE}
+                >
+                  Remove student
+                </button>
+              )}
+            </div>
           </div>
+
+          <Modal
+            open={showRelease}
+            onClose={closeRelease}
+            title="Remove student from your list"
+            maxWidthClassName="max-w-lg"
+          >
+            <p className="text-sm text-gray-600 mb-4">
+              {student?.fullName} will no longer be assigned to you. The admin
+              and your branch principal are told, so they can update the
+              record or find a new shadow teacher. Their history (symptoms,
+              check-ins, reports) is kept.
+            </p>
+
+            <p className="text-xs font-medium text-gray-500 mb-2">Reason</p>
+            <div className="space-y-2" role="radiogroup">
+              {[
+                { value: "leaving_school", label: "The student is leaving the school" },
+                { value: "parent_request", label: "The parents asked to change the shadow teacher" },
+                { value: "other", label: "Other reason" },
+              ].map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-3 min-h-10 px-3 rounded border cursor-pointer text-sm ${
+                    releaseReason === opt.value
+                      ? "border-blue-900 bg-blue-50 text-gray-900"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="release-reason"
+                    value={opt.value}
+                    checked={releaseReason === opt.value}
+                    onChange={() => {
+                      setReleaseReason(opt.value);
+                      setReleaseErrors({});
+                    }}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <FieldError message={releaseErrors.reason} />
+
+            <label className="block text-xs font-medium text-gray-500 mt-4 mb-1">
+              Details {releaseReason === "other" ? "" : "(optional)"}
+            </label>
+            <textarea
+              rows={3}
+              value={releaseNote}
+              onChange={(e) => {
+                setReleaseNote(e.target.value);
+                setReleaseErrors((prev) => ({ ...prev, note: undefined }));
+              }}
+              placeholder="e.g. Last day is 30 October"
+              className={`w-full text-sm border rounded px-3 py-2 outline-none focus:border-blue-400 ${
+                releaseErrors.note ? "border-red-400" : "border-gray-200"
+              }`}
+            />
+            <FieldError message={releaseErrors.note} />
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button type="button" onClick={closeRelease} className={BTN_SECONDARY}>
+                Keep student
+              </button>
+              <button
+                type="button"
+                onClick={submitRelease}
+                disabled={releasing}
+                className={BTN_DANGER}
+              >
+                {releasing ? "Removing..." : "Remove student"}
+              </button>
+            </div>
+          </Modal>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main column */}

@@ -703,7 +703,7 @@ export default function AdminStudentHistoryPage({
 
       {studentRecord && (
         <ProfileBanner
-          className="-mt-4 mb-6"
+          className="mb-6"
           name={studentRecord.fullName}
           lines={[
             { label: "Admission No", value: studentRecord.admissionNumber },

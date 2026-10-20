@@ -176,6 +176,15 @@ const studentSchema = new mongoose.Schema(
         },
         assignedAt: { type: Date, default: Date.now },
         removedAt: { type: Date, default: null },
+        // Why the placement ended, when the shadow teacher released the
+        // child themselves: "leaving_school" | "parent_request" | "other".
+        removedReason: { type: String, default: "" },
+        removedNote: { type: String, trim: true, default: "" },
+        removedBy: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          default: null,
+        },
       },
     ],
 

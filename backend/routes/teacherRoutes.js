@@ -17,6 +17,7 @@ import {
   getBreakActivityOptions,
   logBreakActivity,
   getBreakActivityHistory,
+  releaseStudent,
 } from "../controllers/teacherController.js";
 import {
   listMyAssignmentRequestsAsTeacher,
@@ -74,6 +75,9 @@ router.post("/emotion-checkin", submitEmotionCheckin);
 router.patch("/emotion-checkin/:checkinId", updateOwnEmotionCheckin);
 router.delete("/emotion-checkin/:checkinId", deleteOwnEmotionCheckin);
 router.patch("/students/:studentId/flag", setStudentFlag);
+// Shadow teacher removes a child from their own list (leaving school /
+// parents asked for a different teacher).
+router.post("/students/:studentId/release", authorizeRoles("shadow_teacher"), releaseStudent);
 router.get("/break-activity-options", getBreakActivityOptions);
 router.post("/break-activities", logBreakActivity);
 router.get(

@@ -1,5 +1,6 @@
 import Student from "../models/Student.js";
 import User from "../models/User.js";
+import Message from "../models/Message.js";
 import TeacherProfile from "../models/TeacherProfile.js";
 import SymptomLog, { SYMPTOM_OPTIONS } from "../models/SymptomLog.js";
 import EmotionCheckin, { EMOJI_SCORES } from "../models/EmotionCheckin.js";
@@ -887,5 +888,103 @@ export const setStudentFlag = async (req, res) => {
       success: false,
       message: "Server Error",
     });
+  }
+};
+
+export const RELEASE_REASONS = {
+  leaving_school: "The student is leaving the school",
+  parent_request: "The parents asked to change the shadow teacher",
+  other: "Other reason",
+};
+
+// @route   POST /api/teacher/students/:studentId/release
+// @access  Shadow Teacher — only a student currently assigned to them
+// Body: { reason: "leaving_school" | "parent_request" | "other", note? }
+// The shadow teacher removes the child from their own list (the child is
+// leaving the school, or the parents asked for a different teacher). The
+// child becomes "unassigned"; the placement is closed in teacherHistory with
+// the reason, so the teacher's record stays on file. The admin(s) and the
+// branch principal get a message so they can follow up (archive the child,
+// or request a new teacher).
+export const releaseStudent = async (req, res) => {
+  const { studentId } = req.params;
+  const { reason } = req.body;
+  const note = typeof req.body.note === "string" ? req.body.note.trim() : "";
+
+  try {
+    if (!RELEASE_REASONS[reason]) {
+      return res.status(400).json({
+        success: false,
+        message: "Choose why the student is being removed",
+      });
+    }
+    if (reason === "other" && !note) {
+      return res.status(400).json({
+        success: false,
+        message: "Please explain the reason",
+      });
+    }
+
+    const student = await Student.findOne({
+      _id: studentId,
+      assignedTeacher: req.user.id,
+    });
+    if (!student) {
+      return res.status(403).json({
+        success: false,
+        message: "This student is not assigned to you",
+      });
+    }
+
+    const now = new Date();
+    const current = student.teacherHistory.find(
+      (h) => !h.removedAt && h.teacher.toString() === req.user.id
+    );
+    const closing = { removedAt: now, removedReason: reason, removedNote: note, removedBy: req.user.id };
+    if (current) Object.assign(current, closing);
+    else
+      student.teacherHistory.push({
+        teacher: req.user.id,
+        assignedAt: student.createdAt,
+        ...closing,
+      });
+    student.assignedTeacher = null;
+    student.status = "unassigned";
+    await student.save();
+
+    // Tell the admin(s) and the branch principal.
+    const me = await User.findById(req.user.id).select("name");
+    const body =
+      `${me?.name || "The shadow teacher"} has removed ${student.fullName} (${student.grade}, ${student.branch}) from their students.` +
+      `\n\nReason: ${RELEASE_REASONS[reason]}${note ? ` — ${note}` : ""}` +
+      `\n\n${student.fullName} now has no shadow teacher. ` +
+      (reason === "leaving_school"
+        ? "Please update the student's record."
+        : "Please request a new shadow teacher from the student's profile.");
+    const recipients = await User.find({
+      $or: [{ role: "admin" }, { role: "principal", branch: student.branch }],
+    }).select("_id role");
+    try {
+      await Message.insertMany(
+        recipients.map((r) => ({
+          sender: req.user.id,
+          senderRole: req.user.role,
+          recipient: r._id,
+          recipientRole: r.role,
+          category: "Teacher Assignment",
+          body,
+        }))
+      );
+    } catch (err) {
+      console.error("Failed to send release notification", err);
+    }
+
+    res.json({
+      success: true,
+      message: `${student.fullName} has been removed from your students`,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };
