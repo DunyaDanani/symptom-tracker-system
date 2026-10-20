@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { formatText } from "@/lib/format";
 
 interface AssignedStudent {
   _id: string;
@@ -45,16 +47,16 @@ export default function TeacherUploadModulesPickerPage() {
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         Upload Modules
       </h1>
-      <p className="text-sm text-gray-500 -mt-6 mb-8">
+      <p className="text-sm text-gray-500 mb-8">
         Select a student to manage their learning modules, past papers, and
         files.
       </p>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : students.length === 0 ? (
@@ -76,7 +78,7 @@ export default function TeacherUploadModulesPickerPage() {
                 {s.grade}
                 {s.section ? ` · ${s.section}` : ""}
               </p>
-              <p className="text-xs text-gray-400 mt-2">{s.diagnosis}</p>
+              <p className="text-xs text-gray-400 mt-2">{formatText(s.diagnosis)}</p>
             </Link>
           ))}
         </div>

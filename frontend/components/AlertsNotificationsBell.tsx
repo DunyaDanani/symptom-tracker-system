@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { API_BASE } from "@/lib/config";
+import { BTN_SECONDARY } from "@/lib/ui";
 
 interface AlertItem {
   _id: string;
@@ -123,6 +124,7 @@ export default function AlertsNotificationsBell({
       Notification.requestPermission();
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadAlerts();
     loadMessageCount();
     // Poll every 30s so admins see new threshold breaches / messages
@@ -201,7 +203,7 @@ export default function AlertsNotificationsBell({
               </p>
               <Link
                 href="/dashboard/admin/alerts"
-                className="text-xs text-blue-600 hover:underline"
+                className={BTN_SECONDARY}
                 onClick={() => setOpen(false)}
               >
                 View all →
@@ -233,7 +235,7 @@ export default function AlertsNotificationsBell({
                       <button
                         onClick={() => acknowledge(alert._id)}
                         disabled={busyId === alert._id}
-                        className="text-xs text-blue-600 hover:underline shrink-0 disabled:opacity-50"
+                        className={`${BTN_SECONDARY} shrink-0`}
                       >
                         {busyId === alert._id ? "..." : "Dismiss"}
                       </button>
@@ -252,7 +254,7 @@ export default function AlertsNotificationsBell({
               </p>
               <Link
                 href={messagesHref}
-                className="text-xs text-blue-600 hover:underline"
+                className={BTN_SECONDARY}
                 onClick={() => setOpen(false)}
               >
                 View all →

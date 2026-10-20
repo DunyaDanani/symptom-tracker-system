@@ -13,6 +13,7 @@ import {
   type PastPaperSubjectGroup,
 } from "@/components/SubjectResourceGrid";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 // The single-subject page a user lands on after clicking a subject card in
 // StudyModuleContent. Fetches the same full module/past-paper listing as
@@ -86,6 +87,7 @@ export default function SubjectDetailContent({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -194,7 +196,7 @@ export default function SubjectDetailContent({
   };
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading...</p>;
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -206,7 +208,7 @@ export default function SubjectDetailContent({
 
     return (
       <>
-        <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+        <h1 className="text-2xl font-semibold text-blue-900 mb-8">
           {subject} — Past Papers
         </h1>
 
@@ -245,7 +247,7 @@ export default function SubjectDetailContent({
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         {subject}
       </h1>
 
@@ -314,7 +316,7 @@ export default function SubjectDetailContent({
 
                         {t.submissions.length === 0 ? (
                           <p className="text-xs text-gray-400 mb-3">
-                            You haven't submitted anything for this topic yet.
+                            You haven&apos;t submitted anything for this topic yet.
                           </p>
                         ) : (
                           <div className="space-y-1.5 mb-3">

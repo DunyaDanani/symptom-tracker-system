@@ -61,6 +61,29 @@ mongoose.connection.once("open", async () => {
       );
       console.log(`Cancelled ${staleIds.length} duplicate teacher request(s).`);
     }
+    // Requests made before they were tied to a specific student can't
+    // auto-assign the teacher when accepted, so close them; the admin
+    // re-requests the teacher from the student's profile.
+    const legacy = await TeacherAssignmentRequest.updateMany(
+      {
+        status: { $in: OPEN_REQUEST_STATUSES },
+        $or: [{ student: null }, { student: { $exists: false } }],
+      },
+      {
+        $set: {
+          status: "cancelled",
+          isOpen: false,
+          cancelledAt: new Date(),
+          denialReason:
+            "Closed automatically: made before requests were linked to a student. Please request the teacher again from the student's profile.",
+        },
+      }
+    );
+    if (legacy.modifiedCount) {
+      console.log(
+        `Closed ${legacy.modifiedCount} old teacher request(s) not linked to a student — re-request them from the student's profile.`
+      );
+    }
     await TeacherAssignmentRequest.syncIndexes();
     await Student.updateMany(
       { assignedTeacher: { $ne: null }, "teacherHistory.0": { $exists: false } },

@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 
 import { API_BASE } from "@/lib/config";
+import { BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER, BTN_DANGER_OUTLINE } from "@/lib/ui";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 
 interface CurrentStudent {
   _id: string;
@@ -86,6 +89,7 @@ export default function PrincipalTeacherRequestsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAll]);
@@ -117,6 +121,7 @@ export default function PrincipalTeacherRequestsPage() {
       if (!data.success) {
         setError(data.message || "Failed to update request");
       } else {
+        toast.success(action === "cancel" ? "Request cancelled" : "Request sent to the teacher");
         setDenyingId(null);
         setDenyReason("");
         setForwardingId(null);
@@ -152,13 +157,13 @@ export default function PrincipalTeacherRequestsPage() {
 
   return (
     <PrincipalDashboardLayout>
-      <div className="flex items-center justify-between mt-2 mb-1">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-1">
         <h1 className="text-2xl font-semibold text-blue-900">
-          Shadow Teacher Assignment Requests
+          Shadow Teacher Requests
         </h1>
         <button
           onClick={() => setShowAll((v) => !v)}
-          className="text-xs text-blue-600 hover:underline"
+          className={BTN_SECONDARY}
         >
           {showAll ? "Show pending only" : "Show all"}
         </button>
@@ -172,7 +177,7 @@ export default function PrincipalTeacherRequestsPage() {
       {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : requests.length === 0 ? (
         <div className="bg-white rounded-md shadow-sm p-8 text-center text-gray-400 text-sm">
           {showAll ? "No requests yet." : "No pending requests."}
@@ -290,7 +295,7 @@ export default function PrincipalTeacherRequestsPage() {
                             review(r._id, "forward", { message: forwardMessage });
                           }}
                           disabled={actingId === r._id}
-                          className="text-xs font-medium px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60"
+                          className={BTN_SUCCESS}
                         >
                           {actingId === r._id ? "Sending..." : "Send to teacher"}
                         </button>
@@ -300,7 +305,7 @@ export default function PrincipalTeacherRequestsPage() {
                             setForwardMessage("");
                             setForwardError("");
                           }}
-                          className="text-xs text-gray-500 hover:underline"
+                          className={BTN_SECONDARY}
                         >
                           Back
                         </button>
@@ -317,7 +322,7 @@ export default function PrincipalTeacherRequestsPage() {
                       <button
                         onClick={() => review(r._id, "cancel", { reason: denyReason })}
                         disabled={actingId === r._id}
-                        className="text-xs font-medium px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white disabled:opacity-60 whitespace-nowrap"
+                        className={BTN_DANGER}
                       >
                         Confirm cancel
                       </button>
@@ -326,7 +331,7 @@ export default function PrincipalTeacherRequestsPage() {
                           setDenyingId(null);
                           setDenyReason("");
                         }}
-                        className="text-xs text-gray-500 hover:underline"
+                        className={BTN_SECONDARY}
                       >
                         Back
                       </button>
@@ -344,7 +349,7 @@ export default function PrincipalTeacherRequestsPage() {
                           );
                         }}
                         disabled={actingId === r._id}
-                        className="text-xs font-medium px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60"
+                        className={BTN_SUCCESS}
                       >
                         Send to teacher
                       </button>
@@ -355,7 +360,7 @@ export default function PrincipalTeacherRequestsPage() {
                           setDenyingId(r._id);
                         }}
                         disabled={actingId === r._id}
-                        className="text-xs font-medium px-4 py-2 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        className={BTN_DANGER_OUTLINE}
                       >
                         Cancel request
                       </button>

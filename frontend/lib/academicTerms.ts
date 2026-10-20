@@ -80,6 +80,7 @@ export function useAcademicTerms(studentId?: string | null) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);

@@ -4,6 +4,9 @@ import { use, useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import SubpageHeader from "@/components/SubpageHeader";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
+import { BTN_SECONDARY, BTN_DANGER_OUTLINE } from "@/lib/ui";
 
 interface StudentSummary {
   _id: string;
@@ -139,6 +142,7 @@ export default function TeacherLogSymptomsPage({
       const data = await res.json();
       if (data.success) {
         setStatus("Symptom log saved.");
+        toast.success("Symptom log saved");
         setSelectedSymptoms([]);
         setNotes("");
         setMedications([]);
@@ -163,7 +167,7 @@ export default function TeacherLogSymptomsPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -232,7 +236,7 @@ export default function TeacherLogSymptomsPage({
                   <button
                     type="button"
                     onClick={addMedicationRow}
-                    className="text-xs text-blue-600 hover:underline"
+                    className={BTN_SECONDARY}
                   >
                     + Add medication
                   </button>
@@ -259,7 +263,7 @@ export default function TeacherLogSymptomsPage({
                           <button
                             type="button"
                             onClick={() => removeMedicationRow(i)}
-                            className="text-xs text-red-500 hover:underline shrink-0"
+                            className={BTN_DANGER_OUTLINE}
                           >
                             Remove
                           </button>

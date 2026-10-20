@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface BreakActivityEntry {
   _id: string;
@@ -52,7 +53,7 @@ function BreakActivityContent() {
   }, []);
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading...</p>;
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -94,7 +95,7 @@ function BreakActivityContent() {
 export default function ParentBreakActivitiesPage() {
   return (
     <FamilyDashboardLayout role="parent">
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         Break Time Activities
       </h1>
       <p className="text-sm text-gray-500 mb-8">

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { API_BASE } from "@/lib/config";
+import { BTN_DANGER_OUTLINE, BTN_SECONDARY } from "@/lib/ui";
+import { toast } from "@/lib/toast";
+import { formatText } from "@/lib/format";
 
 // Admin controls for a student's shadow teacher placement:
 //  - remove the current teacher (their account and placement history are
@@ -100,7 +103,7 @@ export default function StudentTeacherPanel({
       });
       const data = await res.json();
       if (!data.success) setError(data.message || "Something went wrong");
-      else if (data.message) setNotice(data.message);
+      else if (data.message) toast.success(data.message);
       return data.success as boolean;
     } catch (err) {
       console.error(err);
@@ -171,7 +174,7 @@ export default function StudentTeacherPanel({
             </button>
             <button
               onClick={() => setConfirmRemove(false)}
-              className="text-xs text-gray-500 hover:underline"
+              className={BTN_SECONDARY}
             >
               Back
             </button>
@@ -179,7 +182,7 @@ export default function StudentTeacherPanel({
         ) : (
           <button
             onClick={() => setConfirmRemove(true)}
-            className="text-xs text-red-500 hover:underline"
+            className={BTN_DANGER_OUTLINE}
           >
             Remove shadow teacher
           </button>
@@ -231,7 +234,7 @@ export default function StudentTeacherPanel({
                               ? `Currently with ${t.currentStudents.map((c) => c.name).join(", ")}`
                               : t.lastBranch
                               ? `No student now · last worked in ${t.lastBranch}`
-                              : t.specialization || "General"}
+                              : formatText(t.specialization) || "General"}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -260,7 +263,7 @@ export default function StudentTeacherPanel({
                             <button
                               onClick={() => cancelRequest(t._id, open._id)}
                               disabled={isBusy}
-                              className="text-xs text-red-500 hover:underline disabled:opacity-60"
+                              className={BTN_DANGER_OUTLINE}
                             >
                               Cancel request
                             </button>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Modal from "@/components/Modal";
 import { API_BASE } from "@/lib/config";
+import { toast } from "@/lib/toast";
 
 interface EmotionCheckinModalProps {
   open: boolean;
@@ -63,6 +64,7 @@ export default function EmotionCheckinModal({
   // logging), so each open starts its own brand-new check-in record.
   useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
       setStep("child");
       setError("");
       setActivityPlan(null);
@@ -118,6 +120,7 @@ export default function EmotionCheckinModal({
       }
       setActivityPlan(data.activityPlan);
       setStep("result");
+      toast.success("Emotion check-in saved");
       onCompleted?.();
     } catch (err) {
       console.error("Failed to submit teacher emoji", err);

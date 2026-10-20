@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { BTN_SECONDARY } from "@/lib/ui";
 interface SentMessage {
   _id: string;
   recipient: { name: string; role: string } | null;
@@ -52,7 +54,7 @@ export default function MessageSentList() {
     load();
   }, []);
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading...</p>;
+  if (loading) return <LoadingSkeleton />;
   if (error) return <p className="text-red-500 text-sm">{error}</p>;
   if (messages.length === 0) {
     return (
@@ -100,7 +102,7 @@ export default function MessageSentList() {
               onClick={() =>
                 openAuthenticatedFile(`${API_BASE}/messages/${m._id}/attachment`)
               }
-              className="text-xs text-blue-600 hover:underline mt-2 inline-block"
+              className={`${BTN_SECONDARY} mt-2`}
             >
               📎 {m.attachmentName || "Attachment"}
             </button>

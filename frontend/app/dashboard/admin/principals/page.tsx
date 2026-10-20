@@ -7,6 +7,7 @@ import Avatar from "@/components/Avatar";
 import AddPrincipalModal from "@/components/AddPrincipalModal";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface Principal {
   _id: string;
@@ -46,6 +47,7 @@ export default function AdminPrincipalsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadPrincipals();
   }, [loadPrincipals]);
 
@@ -76,7 +78,7 @@ export default function AdminPrincipalsPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mt-2 mb-8">
+      <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">
           Branch Principals
         </h1>
@@ -96,7 +98,7 @@ export default function AdminPrincipalsPage() {
       />
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : principals.length === 0 ? (

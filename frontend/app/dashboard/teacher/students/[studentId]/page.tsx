@@ -5,7 +5,10 @@ import Link from "next/link";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import Modal from "@/components/Modal";
 import { API_BASE } from "@/lib/config";
-import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
+import { BTN_SECONDARY } from "@/lib/ui";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
+import { formatCommunication, formatText } from "@/lib/format";
 
 // Common reasons a shadow teacher (or admin) flags a student for the
 // principal's attention — covers the majority of cases with one click;
@@ -89,6 +92,7 @@ export default function TeacherStudentHubPage({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [studentId]);
@@ -119,7 +123,12 @@ export default function TeacherStudentHubPage({
         }
       );
       const data = await res.json();
-      if (data.success) await load();
+      if (data.success) {
+        toast.success(student.flagged ? "Flag cleared" : "Student flagged for attention");
+        await load();
+      } else {
+        toast.error(data.message || "Could not update the flag");
+      }
     } catch (err) {
       console.error("Failed to update flag", err);
     } finally {
@@ -136,38 +145,38 @@ export default function TeacherStudentHubPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm mt-4">Loading...</p>
+        <LoadingSkeleton className="mt-4" />
       ) : error ? (
         <p className="text-red-500 text-sm mt-4">{error}</p>
       ) : (
         <>
 
-          <ProfileBanner
-            className="mt-2 mb-6"
-            name={student?.fullName || ""}
-            lines={[
-              { label: "Admission No", value: student?.admissionNumber },
-              { label: "Grade", value: student?.grade },
-              { label: "Section", value: student?.section },
-              { label: "Diagnosis", value: student?.diagnosis },
-            ]}
-            badges={
-              student?.flagged ? (
-                <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
-                  Flagged
-                </span>
-              ) : null
-            }
-            actions={
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(true)}
-                className={BANNER_ACTION_CLASSES}
-              >
-                View Profile
-              </button>
-            }
-          />
+          <div className="flex items-start justify-between gap-4 flex-wrap mt-2 mb-6">
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl font-semibold text-blue-900">
+                  {student?.fullName}
+                </h1>
+                {student?.flagged && (
+                  <span className="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full">
+                    Flagged
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">
+                {student?.grade}
+                {student?.section ? ` · ${student.section}` : ""}
+                {student?.diagnosis ? ` · ${formatText(student.diagnosis)}` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className={BTN_SECONDARY}
+            >
+              View Profile
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main column */}
@@ -284,7 +293,7 @@ export default function TeacherStudentHubPage({
               />
               <ProfileRow
                 label="Communication"
-                value={student?.communicationLevel?.replace("-", " ") || "—"}
+                value={formatCommunication(student?.communicationLevel) || "—"}
                 capitalize
               />
               <ProfileRow

@@ -224,7 +224,7 @@ export const reviewDoctorDocument = async (req, res) => {
         reviewedBy: req.user.id,
         reviewedAt: new Date(),
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!document) {

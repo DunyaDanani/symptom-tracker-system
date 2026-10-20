@@ -6,6 +6,9 @@ import SubpageHeader from "@/components/SubpageHeader";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import ScoreNote from "@/components/ScoreNote";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
 
 interface StudentSummary {
   _id: string;
@@ -86,6 +89,7 @@ export default function TeacherEmotionHistoryPage({
   );
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const emotionPager = usePager();
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -100,6 +104,7 @@ export default function TeacherEmotionHistoryPage({
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
         setCurrentUserId(payload.id || null);
       } catch (err) {
         console.error("Failed to decode token", err);
@@ -210,6 +215,7 @@ export default function TeacherEmotionHistoryPage({
     dateTo,
     (c) => c.createdAt
   );
+  const emotionPage = paginate(filteredHistory, emotionPager);
 
   return (
     <TeacherDashboardLayout
@@ -220,7 +226,7 @@ export default function TeacherEmotionHistoryPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -262,8 +268,8 @@ export default function TeacherEmotionHistoryPage({
                   <th className="px-4 py-3 font-semibold text-gray-700">
                     Teacher
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    Score
+                  <th className="px-4 py-3 font-semibold text-gray-700" title="1 = very sad, 5 = very happy">
+                    Score (1–5)
                   </th>
                   <th className="px-4 py-3 font-semibold text-gray-700">
                     Activities
@@ -281,7 +287,7 @@ export default function TeacherEmotionHistoryPage({
                     </td>
                   </tr>
                 ) : (
-                  filteredHistory.map((c) =>
+                  emotionPage.items.map((c) =>
                     editingCheckinId === c._id ? (
                       <tr key={c._id} className="border-b border-gray-50">
                         <td colSpan={6} className="px-4 py-4">
@@ -448,6 +454,8 @@ export default function TeacherEmotionHistoryPage({
                 )}
               </tbody>
             </table>
+        <Pagination page={emotionPage} pager={emotionPager} />
+              <ScoreNote className="px-4 py-3 border-t border-gray-50" />
           </div>
         </>
       )}

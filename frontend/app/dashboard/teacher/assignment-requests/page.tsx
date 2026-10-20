@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import { API_BASE } from "@/lib/config";
+import { BTN_SECONDARY, BTN_SUCCESS, BTN_DANGER } from "@/lib/ui";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 
 interface AssignmentRequest {
   _id: string;
@@ -93,6 +96,7 @@ export default function TeacherAssignmentRequestsPage() {
       });
       const data = await res.json();
       if (!data.success) setError(data.message || "Could not update the request");
+      else toast.success(data.message || (action === "accept" ? "Request accepted" : "Request declined"));
       setDecliningId(null);
       setDeclineReason("");
       await load();
@@ -106,8 +110,8 @@ export default function TeacherAssignmentRequestsPage() {
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
-        Shadow Teacher Assignment Requests
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
+        Shadow Teacher Requests
       </h1>
       <p className="text-sm text-gray-500 mb-8">
         Requests from a branch principal to be the shadow teacher for a new
@@ -117,7 +121,7 @@ export default function TeacherAssignmentRequestsPage() {
       {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : requests.length === 0 ? (
         <div className="bg-white rounded-md shadow-sm p-8 text-center text-gray-400 text-sm">
           No requests yet.
@@ -197,7 +201,7 @@ export default function TeacherAssignmentRequestsPage() {
                         <button
                           onClick={() => respond(r._id, "decline")}
                           disabled={actingId === r._id}
-                          className="text-xs font-medium px-4 py-2 rounded bg-red-500 hover:bg-red-600 text-white disabled:opacity-60"
+                          className={BTN_DANGER}
                         >
                           Confirm decline
                         </button>
@@ -206,7 +210,7 @@ export default function TeacherAssignmentRequestsPage() {
                             setDecliningId(null);
                             setDeclineReason("");
                           }}
-                          className="text-xs text-gray-500 hover:underline"
+                          className={BTN_SECONDARY}
                         >
                           Back
                         </button>
@@ -216,14 +220,14 @@ export default function TeacherAssignmentRequestsPage() {
                         <button
                           onClick={() => respond(r._id, "accept")}
                           disabled={actingId === r._id}
-                          className="text-xs font-medium px-4 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60"
+                          className={BTN_SUCCESS}
                         >
                           {actingId === r._id ? "Saving..." : "Accept"}
                         </button>
                         <button
                           onClick={() => setDecliningId(r._id)}
                           disabled={actingId === r._id}
-                          className="text-xs font-medium px-4 py-2 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                          className={BTN_SECONDARY}
                         >
                           Decline
                         </button>

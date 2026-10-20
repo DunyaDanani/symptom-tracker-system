@@ -6,6 +6,8 @@ import SymptomTrendChart from "@/components/SymptomTrendChart";
 import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { tabClass, BTN_PRIMARY, SELECT_CLASS } from "@/lib/ui";
 
 // Same day-count windows the printable report uses, so the on-screen
 // Medication Log matches whatever "Symptom Trends" is currently showing.
@@ -50,6 +52,7 @@ export default function ReportsContent() {
 
   useEffect(() => {
     if (!currentTerm) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setTermAcademicYear((prev) => prev || currentTerm.academicYear);
     setTermTerm((prev) => prev || currentTerm.term);
   }, [currentTerm]);
@@ -179,7 +182,7 @@ export default function ReportsContent() {
 
   return (
     <>
-      <div className="flex items-center justify-between mt-2 mb-8">
+      <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">Reports</h1>
         <div className="flex items-center gap-3">
           {studentId && (
@@ -192,7 +195,7 @@ export default function ReportsContent() {
                   : ""
               }`}
               target="_blank"
-              className="text-sm bg-blue-900 hover:bg-blue-800 text-white rounded-full px-4 py-1.5"
+              className={BTN_PRIMARY}
             >
               Print Report
             </Link>
@@ -203,41 +206,25 @@ export default function ReportsContent() {
       <div className="flex flex-wrap gap-4 mb-6">
         <button
           onClick={() => setRange("weekly")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded font-medium text-sm transition-colors ${
-            range === "weekly"
-              ? "bg-sky-300 text-gray-900"
-              : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-          }`}
+          className={tabClass(range === "weekly")}
         >
           Weekly Report
         </button>
         <button
           onClick={() => setRange("monthly")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded font-medium text-sm transition-colors ${
-            range === "monthly"
-              ? "bg-sky-300 text-gray-900"
-              : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-          }`}
+          className={tabClass(range === "monthly")}
         >
           Monthly Report
         </button>
         <button
           onClick={() => setRange("quarterly")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded font-medium text-sm transition-colors ${
-            range === "quarterly"
-              ? "bg-sky-300 text-gray-900"
-              : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-          }`}
+          className={tabClass(range === "quarterly")}
         >
           Quarterly Report
         </button>
         <button
           onClick={() => setRange("term")}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded font-medium text-sm transition-colors ${
-            range === "term"
-              ? "bg-sky-300 text-gray-900"
-              : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-          }`}
+          className={tabClass(range === "term")}
         >
           By Term
         </button>
@@ -248,7 +235,7 @@ export default function ReportsContent() {
           <select
             value={termAcademicYear}
             onChange={(e) => setTermAcademicYear(e.target.value)}
-            className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+            className={SELECT_CLASS}
           >
             <option value="">Academic Year</option>
             {academicYears.map((y) => (
@@ -260,7 +247,7 @@ export default function ReportsContent() {
           <select
             value={termTerm}
             onChange={(e) => setTermTerm(e.target.value)}
-            className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+            className={SELECT_CLASS}
           >
             <option value="">Term</option>
             {TERMS.map((t) => (
@@ -291,7 +278,7 @@ export default function ReportsContent() {
         </h2>
 
         {loading ? (
-          <p className="text-gray-400 text-sm mt-6">Loading...</p>
+          <InlineSkeleton className="mt-6" />
         ) : error ? (
           <p className="text-red-500 text-sm mt-6">{error}</p>
         ) : (

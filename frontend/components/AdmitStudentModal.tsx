@@ -11,6 +11,9 @@ import {
 import { isValidEmail } from "@/lib/validation";
 import { COUNTRY_CODES, DEFAULT_COUNTRY_DIAL_CODE } from "@/lib/countryCodes";
 import { API_BASE } from "@/lib/config";
+import { BTN_DANGER_OUTLINE, BTN_SECONDARY } from "@/lib/ui";
+import { toast } from "@/lib/toast";
+import { formatText } from "@/lib/format";
 
 interface Teacher {
   _id: string;
@@ -149,7 +152,7 @@ export default function AdmitStudentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  const fetchBranches = async () => {
+  async function fetchBranches() {
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(`${API_BASE}/students/branches`, {
@@ -163,9 +166,9 @@ export default function AdmitStudentModal({
     } catch (err) {
       console.error("Failed to load branches", err);
     }
-  };
+  }
 
-  const fetchTeachers = async () => {
+  async function fetchTeachers() {
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(`${API_BASE}/students/teachers`, {
@@ -176,7 +179,7 @@ export default function AdmitStudentModal({
     } catch (err) {
       console.error("Failed to load teachers", err);
     }
-  };
+  }
 
   // Shadow teachers are 1:1 with a single student. If `t` already has one,
   // this asks the branch principal who currently oversees that teacher for
@@ -237,6 +240,7 @@ export default function AdmitStudentModal({
       );
       const data = await res.json();
       if (!data.success) setRequestError(data.message || "Failed to cancel request");
+      else toast.success("Request cancelled");
       if (form.assignedTeacherId === teacherId) {
         setForm((prev) => ({ ...prev, assignedTeacherId: "" }));
       }
@@ -394,7 +398,7 @@ export default function AdmitStudentModal({
     setError("");
     const token = localStorage.getItem("token");
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       branch: form.branch,
       admissionNumber: form.admissionNumber,
       fullName: form.fullName,
@@ -930,7 +934,7 @@ export default function AdmitStudentModal({
                 <button
                   type="button"
                   onClick={fetchTeachers}
-                  className="text-xs text-blue-600 hover:underline"
+                  className={BTN_SECONDARY}
                 >
                   Refresh
                 </button>
@@ -989,7 +993,7 @@ export default function AdmitStudentModal({
                         <div className="min-w-0">
                           <p className="font-medium text-gray-800 text-sm">{t.name}</p>
                           <p className="text-xs text-gray-500">
-                            {t.specialization || "General"} · {t.experienceYears} years experience
+                            {formatText(t.specialization) || "General"} · {t.experienceYears} years experience
                           </p>
                           {t.currentStudents.length > 0 ? (
                             <p className="text-xs text-amber-600 mt-0.5">
@@ -1034,7 +1038,7 @@ export default function AdmitStudentModal({
                             <button
                               onClick={() => cancelTeacherRequest(t._id, openReq._id)}
                               disabled={isBusy}
-                              className="text-xs text-red-500 hover:underline disabled:opacity-60 whitespace-nowrap"
+                              className={BTN_DANGER_OUTLINE}
                             >
                               {isBusy ? "..." : "Cancel request"}
                             </button>
@@ -1119,7 +1123,7 @@ export default function AdmitStudentModal({
                       }
                     />
                   </Field>
-                  <Field label="Qualification">
+                  <Field label="Highest Qualification">
                     <input
                       className="input"
                       value={form.newTeacher.qualification}
@@ -1242,8 +1246,8 @@ export default function AdmitStudentModal({
                 <>
                   <SummaryRow label="Teacher" value={selectedTeacher.name} />
                   <SummaryRow
-                    label="Qualification"
-                    value={selectedTeacher.qualification || "—"}
+                    label="Highest Qualification"
+                    value={formatText(selectedTeacher.qualification) || "—"}
                   />
                 </>
               ) : requestedTeacher ? (
@@ -1259,7 +1263,7 @@ export default function AdmitStudentModal({
                 <>
                   <SummaryRow label="Teacher (new)" value={form.newTeacher.name} />
                   <SummaryRow
-                    label="Qualification"
+                    label="Highest Qualification"
                     value={form.newTeacher.qualification || "—"}
                   />
                   <SummaryRow

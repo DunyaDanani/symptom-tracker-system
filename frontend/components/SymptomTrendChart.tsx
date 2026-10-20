@@ -16,7 +16,13 @@ interface TrendPoint {
 }
 
 export default function SymptomTrendChart({ data }: { data: TrendPoint[] }) {
-  const maxCount = Math.max(5, ...data.map((d) => d.count));
+  const highest = Math.max(5, ...data.map((d) => d.count));
+  // Explicit, evenly spaced whole-number ticks (0,1,2,3,4,5 ...) — left to
+  // itself the chart picked uneven ones and skipped numbers (5, 4, 2).
+  // Steps grow for busy weeks so the axis never gets crowded.
+  const step = highest <= 10 ? 1 : highest <= 20 ? 2 : highest <= 50 ? 5 : 10;
+  const maxCount = Math.ceil(highest / step) * step;
+  const ticks = Array.from({ length: maxCount / step + 1 }, (_, i) => i * step);
 
   return (
     <div className="w-full h-72">
@@ -32,11 +38,13 @@ export default function SymptomTrendChart({ data }: { data: TrendPoint[] }) {
           <YAxis
             allowDecimals={false}
             domain={[0, maxCount]}
+            ticks={ticks}
+            interval={0}
             tick={{ fontSize: 12, fill: "#6b7280" }}
             axisLine={{ stroke: "#e5e7eb" }}
             tickLine={false}
             label={{
-              value: "Severity",
+              value: "Symptoms logged",
               angle: -90,
               position: "insideLeft",
               fontSize: 11,

@@ -22,7 +22,7 @@ const navItems = [
   { label: "Student", href: "/dashboard/principal/students", icon: StudentIcon },
   { label: "Teachers", href: "/dashboard/principal/teachers", icon: TeachersIcon },
   {
-    label: "Teacher Requests",
+    label: "Shadow Teacher Requests",
     href: "/dashboard/principal/teacher-requests",
     icon: TeacherRequestIcon,
   },

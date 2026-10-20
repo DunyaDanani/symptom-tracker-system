@@ -195,7 +195,7 @@ export const createTeacherAssignmentRequest = async (req, res) => {
           body: withStudent(
             `Request to assign shadow teacher ${teacher.name} to a child joining ${branch}.` +
               (request.note ? `\n\nNote: ${request.note}` : "") +
-              "\n\nReview it under Teacher Requests to send it on to the teacher or deny it.",
+              "\n\nReview it under Shadow Teacher Requests to send it on to the teacher or deny it.",
             request
           ),
         })
@@ -420,7 +420,7 @@ export const reviewTeacherAssignmentRequest = async (req, res) => {
 
     const principalMessage =
       (message && String(message).trim()) ||
-      `Hello ${request.teacher?.name}, we have a child${request.studentName ? `, ${request.studentName},` : ""} joining ${request.branch} and would like you to be their shadow teacher. Please accept or decline under Shadow Teacher Assignment Requests.`;
+      `Hello ${request.teacher?.name}, we have a child${request.studentName ? `, ${request.studentName},` : ""} joining ${request.branch} and would like you to be their shadow teacher. Please accept or decline under Shadow Teacher Requests.`;
 
     request.status = "forwarded";
     request.principalMessage = principalMessage;

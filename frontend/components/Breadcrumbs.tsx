@@ -60,8 +60,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   "study-module": "Study Module",
   "activity-plan": "My Activities",
   "emotion-checkin": "Emotion Check-in",
-  "teacher-requests": "Shadow Teacher Assignment Requests",
-  "assignment-requests": "Shadow Teacher Assignment Requests",
+  "teacher-requests": "Shadow Teacher Requests",
+  "assignment-requests": "Shadow Teacher Requests",
 };
 
 // Full-path overrides for spots where a segment means something different

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { formatCommunication, formatText } from "@/lib/format";
 
 interface AssignedStudent {
   _id: string;
@@ -46,15 +48,15 @@ export default function TeacherStudentsPage() {
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         Symptom Tracking
       </h1>
-      <p className="text-sm text-gray-500 -mt-6 mb-8">
+      <p className="text-sm text-gray-500 mb-8">
         Select a student to log symptoms or view their history.
       </p>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : students.length === 0 ? (
@@ -83,9 +85,9 @@ export default function TeacherStudentsPage() {
                 {s.grade}
                 {s.section ? ` · ${s.section}` : ""}
               </p>
-              <p className="text-xs text-gray-400 mt-2">{s.diagnosis}</p>
+              <p className="text-xs text-gray-400 mt-2">{formatText(s.diagnosis)}</p>
               <p className="text-xs text-gray-400 mt-1 capitalize">
-                {s.communicationLevel.replace("-", " ")}
+                {formatCommunication(s.communicationLevel)}
               </p>
             </Link>
           ))}

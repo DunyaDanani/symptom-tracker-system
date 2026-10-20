@@ -377,7 +377,7 @@ export const acknowledgeAlert = async (req, res) => {
         acknowledgedBy: req.user.id,
         acknowledgedAt: new Date(),
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!alert) {

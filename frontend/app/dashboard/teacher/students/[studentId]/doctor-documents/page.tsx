@@ -5,6 +5,7 @@ import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface DoctorDoc {
   _id: string;
@@ -63,12 +64,12 @@ export default function TeacherDoctorDocumentsPage({
 
   return (
     <TeacherDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Doctor&apos;s Recommendation
       </h1>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : documents.length === 0 ? (

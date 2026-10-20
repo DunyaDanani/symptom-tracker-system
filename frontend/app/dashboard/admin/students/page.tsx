@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 interface Student {
   _id: string;
   branch: string;
@@ -52,10 +53,10 @@ export default function AdminBranchesPage() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">Branches</h1>
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">Branches</h1>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (

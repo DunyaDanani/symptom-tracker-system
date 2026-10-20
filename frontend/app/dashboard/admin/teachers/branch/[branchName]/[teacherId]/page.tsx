@@ -7,6 +7,9 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { API_BASE } from "@/lib/config";
 import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
 import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
+import { formatText } from "@/lib/format";
 interface TeacherProfileData {
   _id: string;
   name: string;
@@ -156,6 +159,7 @@ export default function AdminTeacherProfilePage({
       }
       setTeacher((prev) => (prev ? { ...prev, ...data.teacher } : data.teacher));
       setEditing(false);
+      toast.success("Teacher profile saved");
     } catch (err) {
       console.error("Failed to update teacher", err);
       setSaveError("Unable to reach the server. Please try again.");
@@ -169,7 +173,7 @@ export default function AdminTeacherProfilePage({
       breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
     >
       {loading ? (
-        <p className="text-gray-400 text-sm mt-2">Loading...</p>
+        <LoadingSkeleton className="mt-2" />
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : teacher ? (
@@ -180,7 +184,7 @@ export default function AdminTeacherProfilePage({
             lines={[
               { label: "Role", value: `Shadow Teacher · ${branch}` },
               { label: "Username", value: teacher.username },
-              { label: "Specialization", value: teacher.specialization },
+              { label: "Specialization", value: formatText(teacher.specialization) },
               {
                 label: "Experience",
                 value: `${teacher.experienceYears || 0} years`,
@@ -226,8 +230,8 @@ export default function AdminTeacherProfilePage({
                   { label: "Phone", value: teacher.phone },
                   { label: "NIC", value: teacher.nic },
                   { label: "Age", value: teacher.age },
-                  { label: "Qualification", value: teacher.qualification },
-                  { label: "Specialization", value: teacher.specialization },
+                  { label: "Highest Qualification", value: formatText(teacher.qualification) },
+                  { label: "Specialization", value: formatText(teacher.specialization) },
                   {
                     label: "Experience",
                     value: `${teacher.experienceYears || 0} years`,
@@ -302,7 +306,7 @@ export default function AdminTeacherProfilePage({
                       onChange={(e) => setEditExperienceYears(e.target.value)}
                     />
                   </EditField>
-                  <EditField label="Qualification">
+                  <EditField label="Highest Qualification">
                     <input
                       className="w-full bg-slate-50 border border-slate-200 rounded p-2.5 text-sm outline-none focus:border-sky-400"
                       value={editQualification}

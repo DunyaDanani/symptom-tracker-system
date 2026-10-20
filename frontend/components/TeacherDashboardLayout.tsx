@@ -28,7 +28,7 @@ const navItems = [
 // this layout but are branch-wide, not placed with one child).
 const ASSIGNMENT_REQUESTS_HREF = "/dashboard/teacher/assignment-requests";
 const assignmentRequestsItem = {
-  label: "Shadow Teacher Assignment Requests",
+  label: "Shadow Teacher Requests",
   href: ASSIGNMENT_REQUESTS_HREF,
   icon: RequestIcon,
 };

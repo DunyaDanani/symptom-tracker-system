@@ -6,6 +6,8 @@ import SubpageHeader from "@/components/SubpageHeader";
 import EmotionCheckinModal from "@/components/EmotionCheckinModal";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { formatText } from "@/lib/format";
 interface StudentSummary {
   _id: string;
   fullName: string;
@@ -134,7 +136,7 @@ export default function TeacherEmotionTrackerPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -173,7 +175,7 @@ export default function TeacherEmotionTrackerPage({
                       </span>
                     </span>
                     <span className="text-gray-400">
-                      Score: {today?.compositeScore}
+                      Score: {today?.compositeScore} / 5
                     </span>
                   </div>
                 ) : (
@@ -205,10 +207,13 @@ export default function TeacherEmotionTrackerPage({
               <h2 className="text-sm font-semibold text-gray-700 mb-1">
                 Suggested Activities
               </h2>
-              <p className="text-xs text-gray-400 mb-4">
-                Based on {student?.fullName?.split(" ")[0] || "the child"}
-                &apos;s recorded emotion
-                {diagnosis ? ` and their diagnosis (${diagnosis})` : ""}.
+              <p className="text-sm text-gray-500 mb-4">
+                Personalised for {student?.fullName?.split(" ")[0] || "the child"} by
+                analysing today&apos;s emotion check-in — how they said they felt
+                and how you saw them — together with their diagnosis
+                {diagnosis ? ` (${formatText(diagnosis)})` : ""} and any symptoms
+                logged today. One creative (aesthetic), one social and one
+                academic activity.
               </p>
               <ActivityCardGrid cards={activityPlan.cards} />
             </div>

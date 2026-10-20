@@ -15,6 +15,8 @@ import {
 import FieldError from "@/components/FieldError";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 
 interface Principal {
   _id: string;
@@ -127,6 +129,7 @@ export default function EditPrincipalPage() {
 
       setPrincipal(data.principal);
       setStatus("Saved.");
+      toast.success("Principal details saved");
     } catch (err) {
       console.error("Failed to update principal", err);
       setError("Unable to reach the server. Please try again.");
@@ -138,7 +141,7 @@ export default function EditPrincipalPage() {
   if (loading) {
     return (
       <DashboardLayout>
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       </DashboardLayout>
     );
   }

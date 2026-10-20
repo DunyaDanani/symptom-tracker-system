@@ -5,6 +5,7 @@ import FamilyDashboardLayout from "@/components/FamilyDashboardLayout";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface DoctorDoc {
   _id: string;
@@ -69,6 +70,7 @@ export default function ParentDoctorDocumentsPage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load();
   }, []);
 
@@ -123,7 +125,7 @@ export default function ParentDoctorDocumentsPage() {
 
   return (
     <FamilyDashboardLayout role="parent">
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         Doctor&apos;s Recommendation
       </h1>
       <p className="text-sm text-gray-500 mb-8">
@@ -132,7 +134,7 @@ export default function ParentDoctorDocumentsPage() {
       </p>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (

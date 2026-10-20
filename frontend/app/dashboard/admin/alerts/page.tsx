@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 
 import { API_BASE } from "@/lib/config";
+import { InlineSkeleton } from "@/components/Skeleton";
 
 interface AlertItem {
   _id: string;
@@ -68,6 +69,7 @@ export default function AdminAlertsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load(status, branch);
   }, [status, branch]);
 
@@ -98,7 +100,7 @@ export default function AdminAlertsPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mt-2 mb-8 gap-3 flex-wrap">
+      <div className="flex items-center justify-between mb-8 gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold text-blue-900">Alerts</h1>
         <div className="flex gap-2 items-center flex-wrap">
           <select
@@ -154,8 +156,8 @@ export default function AdminAlertsPage() {
             {loading ? (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-gray-400 text-center">
-                  Loading...
-                </td>
+                    <InlineSkeleton rows={3} />
+                  </td>
               </tr>
             ) : alerts.length === 0 ? (
               <tr>

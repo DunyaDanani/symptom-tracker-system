@@ -9,8 +9,15 @@ const CONNECT_OPTIONS = {
 
 const connectDB = async () => {
   try {
-    console.log("Connecting to:");
-    console.log(process.env.MONGO_URI);
+    // Log only the host — never the full URI, which contains the
+    // database username and password.
+    let host = "MongoDB";
+    try {
+      host = new URL(process.env.MONGO_URI).host;
+    } catch {
+      /* unparseable URI — mongoose.connect below will report it */
+    }
+    console.log(`Connecting to ${host}...`);
 
     await mongoose.connect(process.env.MONGO_URI, CONNECT_OPTIONS);
 

@@ -12,6 +12,9 @@ import {
   FieldErrors,
 } from "@/lib/validation";
 import FieldError from "@/components/FieldError";
+import { BTN_DANGER, BTN_SECONDARY } from "@/lib/ui";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 
 const categoryLabel = (value?: string | null) =>
   PROGRAM_CATEGORIES.find((c) => c.value === value)?.label ?? "";
@@ -132,6 +135,7 @@ export default function AdminAcademicTermsPage() {
       });
       const data = await res.json();
       if (data.success) {
+        toast.success(editingId ? "Term updated" : "Term added");
         cancelEdit();
         await reload();
       } else {
@@ -145,22 +149,35 @@ export default function AdminAcademicTermsPage() {
     }
   };
 
+  // Deleting asks first (inline, like removing a shadow teacher) — terms
+  // drive tagging and term reports, so a mis-click shouldn't wipe one.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const handleDelete = async (id: string) => {
+    setDeletingId(id);
     try {
       const res = await fetch(`${API_BASE}/academic-terms/${id}`, {
         method: "DELETE",
         headers: authHeaders(),
       });
       const data = await res.json();
-      if (data.success) await reload();
+      if (data.success) {
+        toast.success("Term deleted");
+        if (editingId === id) cancelEdit();
+        await reload();
+      }
     } catch (err) {
       console.error("Failed to delete academic term", err);
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         Academic Terms
       </h1>
       <p className="text-sm text-gray-500 mb-8">
@@ -344,7 +361,7 @@ export default function AdminAcademicTermsPage() {
             </p>
           )}
           {loading ? (
-            <p className="px-6 py-4 text-sm text-gray-400">Loading...</p>
+            <InlineSkeleton className="px-6 py-4" />
           ) : error ? (
             <p className="px-6 py-4 text-sm text-red-500">{error}</p>
           ) : visibleTerms.length === 0 ? (
@@ -402,24 +419,45 @@ export default function AdminAcademicTermsPage() {
                       {new Date(t.endDate).toLocaleDateString(undefined, { timeZone: "UTC" })}
                     </td>
                     <td className="px-6 py-3">
-                      <div className="flex items-center gap-3 justify-end">
+                      {confirmDeleteId === t._id ? (
+                        <div className="flex items-center gap-2 justify-end">
+                          <span className="text-xs text-red-700 whitespace-nowrap">
+                            Delete {t.term} {t.academicYear}?
+                          </span>
+                          <button
+                            onClick={() => handleDelete(t._id)}
+                            disabled={deletingId === t._id}
+                            className={BTN_DANGER}
+                          >
+                            {deletingId === t._id ? "Deleting..." : "Delete"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteId(null)}
+                            className={BTN_SECONDARY}
+                          >
+                            Keep
+                          </button>
+                        </div>
+                      ) : (
+                      <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={() => startEdit(t)}
-                          className="text-gray-300 hover:text-blue-600 transition-colors"
+                          className="w-10 h-10 inline-flex items-center justify-center rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           aria-label="Edit term"
                           title="Edit"
                         >
                           <PencilIcon className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(t._id)}
-                          className="text-gray-300 hover:text-red-500 transition-colors"
+                          onClick={() => setConfirmDeleteId(t._id)}
+                          className="w-10 h-10 inline-flex items-center justify-center rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
                           aria-label="Delete term"
                           title="Delete"
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}

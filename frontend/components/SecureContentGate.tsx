@@ -2,6 +2,7 @@
 
 import { ReactNode, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BTN_SECONDARY, BTN_PRIMARY } from "@/lib/ui";
 
 // Lightweight confirmation gate that replaces the old PIN-entry PinGate.
 // Shows a one-time "Secure Content Access" notice before rendering the
@@ -44,14 +45,14 @@ export default function SecureContentGate({
           <button
             type="button"
             onClick={() => router.back()}
-            className="text-sm border border-gray-200 rounded-full px-5 py-1.5 text-gray-600 hover:bg-gray-50"
+            className={BTN_SECONDARY}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => setConfirmed(true)}
-            className="text-sm bg-blue-900 hover:bg-blue-800 text-white rounded-full px-5 py-1.5"
+            className={BTN_PRIMARY}
           >
             Continue
           </button>

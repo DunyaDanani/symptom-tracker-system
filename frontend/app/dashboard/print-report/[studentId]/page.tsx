@@ -7,6 +7,9 @@ import { TERMS, useAcademicTerms } from "@/lib/academicTerms";
 
 import { API_BASE } from "@/lib/config";
 import BackButton from "@/components/BackButton";
+import { formatCommunication, formatText } from "@/lib/format";
+import { tabClass, SELECT_CLASS, BTN_SUCCESS } from "@/lib/ui";
+import { InlineSkeleton } from "@/components/Skeleton";
 
 interface StudentProfile {
   _id: string;
@@ -77,6 +80,19 @@ const RANGE_DAYS: Record<"weekly" | "monthly" | "quarterly", number> = {
   quarterly: 92,
 };
 
+// Report range options for the toolbar. Short labels keep the tabs on one
+// line; the hint explains what each covers.
+const RANGE_TABS: {
+  value: "weekly" | "monthly" | "quarterly" | "term";
+  label: string;
+  hint: string;
+}[] = [
+  { value: "weekly", label: "Weekly", hint: "Last 7 days" },
+  { value: "monthly", label: "Monthly", hint: "Last 5 weeks" },
+  { value: "quarterly", label: "3-Month Conclusion", hint: "Last 3 months — final conclusion report" },
+  { value: "term", label: "By Term", hint: "One academic term:" },
+];
+
 export default function PrintReportPage({
   params,
 }: {
@@ -107,6 +123,7 @@ export default function PrintReportPage({
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setGeneratedBy(localStorage.getItem("name") || "");
 
     // Pick up an initial ?range= (and, for "term", ?academicYear=/?term=)
@@ -131,6 +148,7 @@ export default function PrintReportPage({
   useEffect(() => {
     if (termAcademicYear || termTerm) return;
     if (!currentTerm) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setTermAcademicYear(currentTerm.academicYear);
     setTermTerm(currentTerm.term);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,54 +247,44 @@ export default function PrintReportPage({
       <div className="max-w-3xl mx-auto mb-4 print:hidden">
         <BackButton />
       </div>
-      <div className="max-w-3xl mx-auto flex items-center justify-between mb-6 print:hidden">
-        <div className="flex gap-3">
+      <div className="max-w-3xl mx-auto mb-6 print:hidden space-y-3">
+        {/* Row 1: report range tabs + print action */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Report range">
+            {RANGE_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={range === tab.value}
+                onClick={() => setRange(tab.value)}
+                title={tab.hint}
+                className={tabClass(range === tab.value)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           <button
-            onClick={() => setRange("weekly")}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              range === "weekly"
-                ? "bg-sky-300 text-gray-900"
-                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-            }`}
+            type="button"
+            onClick={() => window.print()}
+            disabled={loading || !!error}
+            className={BTN_SUCCESS}
           >
-            Weekly (Last 7 Days)
+            Print / Save as PDF
           </button>
-          <button
-            onClick={() => setRange("monthly")}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              range === "monthly"
-                ? "bg-sky-300 text-gray-900"
-                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-            }`}
-          >
-            Monthly (Last 5 Weeks)
-          </button>
-          <button
-            onClick={() => setRange("quarterly")}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              range === "quarterly"
-                ? "bg-sky-300 text-gray-900"
-                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-            }`}
-          >
-            3-Month Final Conclusion
-          </button>
-          <button
-            onClick={() => setRange("term")}
-            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-              range === "term"
-                ? "bg-sky-300 text-gray-900"
-                : "bg-sky-100 text-gray-700 hover:bg-sky-200"
-            }`}
-          >
-            By Term
-          </button>
+        </div>
+
+        {/* Row 2: what the selected range covers, plus term pickers */}
+        <div className="flex items-center gap-3 flex-wrap text-sm text-gray-500">
+          <span>{RANGE_TABS.find((t) => t.value === range)?.hint}</span>
           {range === "term" && (
             <>
               <select
                 value={termAcademicYear}
                 onChange={(e) => setTermAcademicYear(e.target.value)}
-                className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+                aria-label="Academic year"
+                className={SELECT_CLASS}
               >
                 <option value="">Academic Year</option>
                 {academicYears.map((y) => (
@@ -288,7 +296,8 @@ export default function PrintReportPage({
               <select
                 value={termTerm}
                 onChange={(e) => setTermTerm(e.target.value)}
-                className="text-sm border border-gray-200 rounded-md px-3 py-2 outline-none focus:border-blue-400 bg-white"
+                aria-label="Term"
+                className={SELECT_CLASS}
               >
                 <option value="">Term</option>
                 {TERMS.map((t) => (
@@ -300,19 +309,12 @@ export default function PrintReportPage({
             </>
           )}
         </div>
-        <button
-          onClick={() => window.print()}
-          disabled={loading || !!error}
-          className="bg-blue-900 hover:bg-blue-800 text-white text-sm font-medium px-5 py-2 rounded disabled:opacity-60"
-        >
-          Print / Save as PDF
-        </button>
       </div>
 
       {/* Printable sheet */}
       <div className="max-w-3xl mx-auto bg-white shadow-sm print:shadow-none rounded-md print:rounded-none p-8">
         {loading ? (
-          <p className="text-gray-400 text-sm">Loading report...</p>
+          <InlineSkeleton rows={6} />
         ) : error ? (
           <p className="text-red-500 text-sm">{error}</p>
         ) : (
@@ -371,10 +373,10 @@ export default function PrintReportPage({
                   student?.section ? " · " + student.section : ""
                 }`}
               />
-              <InfoRow label="Diagnosis" value={student?.diagnosis || "—"} />
+              <InfoRow label="Diagnosis" value={formatText(student?.diagnosis) || "—"} />
               <InfoRow
                 label="Communication Level"
-                value={student?.communicationLevel || "—"}
+                value={formatCommunication(student?.communicationLevel) || "—"}
               />
               <InfoRow
                 label="Shadow Teacher"
@@ -508,7 +510,7 @@ export default function PrintReportPage({
                         Teacher
                       </th>
                       <th className="py-1.5 font-semibold text-gray-600">
-                        Score
+                        Score (1 = very sad, 5 = very happy)
                       </th>
                     </tr>
                   </thead>

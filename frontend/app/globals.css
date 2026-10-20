@@ -102,3 +102,9 @@ input[type="file"] {
   border: none;
   margin-top: 10px;
 }
+
+/* Toast slide-in (components/Toaster.tsx) */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

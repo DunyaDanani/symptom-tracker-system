@@ -10,6 +10,8 @@ import {
   FieldErrors,
 } from "@/lib/validation";
 import FieldError from "@/components/FieldError";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 interface Recipient {
   id: string;
   name: string;
@@ -73,6 +75,7 @@ export default function MessageComposeForm() {
   const [recipientSearch, setRecipientSearch] = useState("");
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setCurrentRole(localStorage.getItem("role"));
   }, []);
 
@@ -143,6 +146,7 @@ export default function MessageComposeForm() {
 
       if (data.success) {
         setStatus("Message sent successfully");
+        toast.success("Message sent");
         setSendSuccess(true);
         setRecipientId("");
         setCategory("");
@@ -162,7 +166,7 @@ export default function MessageComposeForm() {
   };
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading...</p>;
+    return <InlineSkeleton />;
   }
 
   if (error) {

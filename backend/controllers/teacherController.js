@@ -859,7 +859,7 @@ export const setStudentFlag = async (req, res) => {
     const student = await Student.findOneAndUpdate(
       studentAccessFilter(req.user, studentId),
       { flagged: Boolean(flagged), flagNote: flagNote || "" },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!student) {

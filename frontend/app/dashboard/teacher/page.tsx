@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 import TeacherDashboardLayout from "@/components/TeacherDashboardLayout";
 import MiniCalendar from "@/components/MiniCalendar";
 import { API_BASE } from "@/lib/config";
+import { BTN_SECONDARY } from "@/lib/ui";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { formatText } from "@/lib/format";
 
 interface TeacherProfile {
   name: string;
@@ -146,7 +149,7 @@ export default function TeacherDashboardPage() {
         </h2>
 
         {studentsLoading ? (
-          <p className="px-6 pb-6 text-gray-400 text-sm">Loading...</p>
+          <InlineSkeleton className="px-6 pb-6" />
         ) : studentsError ? (
           <p className="px-6 pb-6 text-red-500 text-sm">{studentsError}</p>
         ) : students.length === 0 ? (
@@ -176,7 +179,7 @@ export default function TeacherDashboardPage() {
                 </div>
                 <Link
                   href={`/dashboard/teacher/students/${s._id}`}
-                  className="text-xs font-medium text-blue-600 hover:underline shrink-0"
+                  className={`${BTN_SECONDARY} shrink-0`}
                 >
                   View Profile
                 </Link>
@@ -194,19 +197,19 @@ export default function TeacherDashboardPage() {
           </h2>
 
           {loading ? (
-            <p className="text-gray-400 text-sm">Loading...</p>
+            <InlineSkeleton />
           ) : error ? (
             <p className="text-red-500 text-sm">{error}</p>
           ) : teacher ? (
             <dl className="space-y-3 text-sm">
               <Row label="Name" value={teacher.name} />
               <Row
-                label="Qualification"
-                value={teacher.qualification || "—"}
+                label="Highest Qualification"
+                value={formatText(teacher.qualification) || "—"}
               />
               <Row
                 label="Specialization"
-                value={teacher.specialization || "—"}
+                value={formatText(teacher.specialization) || "—"}
               />
               <Row
                 label="Experience"

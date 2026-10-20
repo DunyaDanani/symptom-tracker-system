@@ -1,5 +1,7 @@
 "use client";
 
+import { BTN_SECONDARY } from "@/lib/ui";
+
 // Small "From / To" date-range picker used above history/log tables
 // (symptom logs, emotion check-ins) across the parent, teacher, admin, and
 // principal dashboards. Purely a controlled UI — the parent page owns the
@@ -56,7 +58,7 @@ export default function DateRangeFilter({
           <button
             type="button"
             onClick={onClear}
-            className="text-xs text-blue-600 hover:underline pb-2.5"
+            className={BTN_SECONDARY}
           >
             Clear dates
           </button>

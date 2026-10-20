@@ -6,6 +6,18 @@ import SecureContentGate from "@/components/SecureContentGate";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import ScoreNote from "@/components/ScoreNote";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
+
+interface ActivityCard {
+  key: string;
+  category: string;
+  icon: string;
+  title: string;
+  color: string;
+  description: string;
+}
 
 interface EmotionCheckinEntry {
   _id: string;
@@ -13,6 +25,10 @@ interface EmotionCheckinEntry {
   teacherEmoji?: string;
   compositeScore: number;
   createdAt: string;
+  // The personalised plan (Aesthetic / Social / Academic) generated when
+  // the shadow teacher completed this check-in — same cards the teacher
+  // sees in the "Today's Activity Plan" pop-up.
+  activityPlan?: { cards?: ActivityCard[] } | null;
 }
 
 const EMOJI_ICON: Record<string, string> = {
@@ -78,6 +94,7 @@ function EmotionHistoryContent() {
   const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const emotionPager = usePager();
 
   useEffect(() => {
     const load = async () => {
@@ -115,7 +132,7 @@ function EmotionHistoryContent() {
   }, []);
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading...</p>;
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -132,15 +149,76 @@ function EmotionHistoryContent() {
       : null;
   const suggestions = getSuggestions(avgScore);
 
+  // Most recent check-in that has a personalised plan.
+  const latestPlan = checkins.find((c) => c.activityPlan?.cards?.length);
+  const planCards = latestPlan?.activityPlan?.cards || [];
+
   const filteredCheckins = filterByDateRange(
     checkins,
     dateFrom,
     dateTo,
     (c) => c.createdAt
   );
+  const emotionPage = paginate(filteredCheckins, emotionPager);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-6">
+      {/* Suggested activities — compact cards, same style as the teacher's
+          "Today's Activity Plan" pop-up */}
+      <div className="bg-white rounded-md shadow-sm p-6">
+        <div className="flex items-baseline justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-gray-700">
+            Suggested Activities
+          </h2>
+          <p className="text-xs text-gray-500">
+            {planCards.length > 0 && latestPlan
+              ? `Based on the check-in on ${new Date(latestPlan.createdAt).toLocaleDateString()}`
+              : suggestions?.label}
+          </p>
+        </div>
+        {/* Explains where these come from, for anyone seeing this for the first time */}
+        <p className="text-sm text-gray-500 mt-1 mb-4">
+          {planCards.length > 0
+            ? "Personalised for your child by analysing their latest emotion check-in — how they said they felt and how their shadow teacher saw them — together with their diagnosis and any symptoms logged that day. You get one creative (aesthetic), one social and one academic activity to try at home."
+            : "General ideas based on your child's average mood across their last 7 emotion check-ins. Personalised activities will appear here after the next completed check-in."}
+        </p>
+
+        {planCards.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {planCards.map((card) => (
+              <div
+                key={card.key}
+                className={`rounded-md p-4 flex items-start gap-3 ${card.color}`}
+              >
+                <span className="text-2xl leading-none">{card.icon}</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
+                    {card.category}
+                  </p>
+                  <p className="font-semibold">{card.title}</p>
+                  <p className="text-sm opacity-90">{card.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : suggestions ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {suggestions.activities.map((activity, i) => (
+              <div
+                key={i}
+                className="rounded-md p-4 bg-sky-50 text-sky-900 text-sm"
+              >
+                {activity}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-400 text-sm">
+            Suggestions will appear once check-ins are recorded.
+          </p>
+        )}
+      </div>
+
       <div className="bg-white rounded-md shadow-sm overflow-hidden">
         <h2 className="text-sm font-semibold text-gray-700 p-6 pb-0">
           Check-in History
@@ -166,7 +244,7 @@ function EmotionHistoryContent() {
               <th className="px-4 py-3 font-semibold text-gray-700">
                 Teacher
               </th>
-              <th className="px-4 py-3 font-semibold text-gray-700">Score</th>
+              <th className="px-4 py-3 font-semibold text-gray-700" title="1 = very sad, 5 = very happy">Score (1–5)</th>
             </tr>
           </thead>
           <tbody>
@@ -179,7 +257,7 @@ function EmotionHistoryContent() {
                 </td>
               </tr>
             ) : (
-              filteredCheckins.map((c) => (
+              emotionPage.items.map((c) => (
                 <tr key={c._id} className="border-b border-gray-50">
                   <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                     {new Date(c.createdAt).toLocaleString()}
@@ -206,33 +284,10 @@ function EmotionHistoryContent() {
             )}
           </tbody>
         </table>
+        <Pagination page={emotionPage} pager={emotionPager} />
+        <ScoreNote className="px-4 py-3 border-t border-gray-50" />
       </div>
 
-      <div className="bg-white rounded-md shadow-sm p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-1">
-          Suggested Activities
-        </h2>
-        {suggestions ? (
-          <>
-            <p className="text-xs text-gray-500 mb-4">{suggestions.label}</p>
-            <ul className="space-y-3">
-              {suggestions.activities.map((activity, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-2 text-sm text-gray-700"
-                >
-                  <span className="text-pink-500 mt-0.5">•</span>
-                  <span>{activity}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="text-gray-400 text-sm">
-            Suggestions will appear once check-ins are recorded.
-          </p>
-        )}
-      </div>
     </div>
   );
 }
@@ -240,7 +295,7 @@ function EmotionHistoryContent() {
 export default function ParentEmotionHistoryPage() {
   return (
     <FamilyDashboardLayout role="parent">
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Emotion Tracker
       </h1>
 

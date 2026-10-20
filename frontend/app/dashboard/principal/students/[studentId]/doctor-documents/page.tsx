@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 import { API_BASE } from "@/lib/config";
+import { InlineSkeleton } from "@/components/Skeleton";
 
 interface DoctorDoc {
   _id: string;
@@ -150,12 +151,12 @@ export default function PrincipalDoctorDocumentsPage({
 
   return (
     <PrincipalDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Doctor&apos;s Recommendation
       </h1>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <InlineSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : documents.length === 0 ? (
@@ -207,7 +208,7 @@ export default function PrincipalDoctorDocumentsPage({
 
       <div className="bg-white rounded-md shadow-sm p-6 max-w-2xl">
         {eligibilityLoading ? (
-          <p className="text-gray-400 text-sm">Loading...</p>
+          <InlineSkeleton />
         ) : (
           <>
             <div className="flex items-center gap-3 mb-4">

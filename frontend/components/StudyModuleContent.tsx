@@ -8,6 +8,7 @@ import {
   type PastPaperSubjectGroup,
 } from "@/components/SubjectResourceGrid";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 // Shared "Modules" page body used by both the parent and child dashboards
 // — resolved through the unified /api/students/linked endpoint so the
@@ -68,12 +69,12 @@ export default function StudyModuleContent({
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Modules
       </h1>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (

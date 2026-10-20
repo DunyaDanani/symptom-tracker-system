@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 import MiniCalendar from "@/components/MiniCalendar";
 
 import { API_BASE } from "@/lib/config";
-import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
-import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { formatCommunication, formatText } from "@/lib/format";
 
 type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 
@@ -49,7 +49,6 @@ export default function FamilyDashboardHome({
   role: "parent" | "child";
 }) {
   const [student, setStudent] = useState<LinkedStudent | null>(null);
-  const [showProfile, setShowProfile] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [today] = useState(new Date());
@@ -114,7 +113,7 @@ export default function FamilyDashboardHome({
     return (
       <>
         <h1 className="text-3xl font-bold text-blue-900 mb-1">
-          Hi {student?.fullName?.split(" ")[0] || "there"}! 👋
+          Hi {student?.fullName?.split(" ")[0] || "there"}!
         </h1>
         <p className="text-sm text-gray-500 mb-8">
           Pick something fun to do today ✨
@@ -141,11 +140,11 @@ export default function FamilyDashboardHome({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-3xl shadow-sm p-6">
             <h2 className="text-sm font-bold text-gray-700 mb-4">
-              🧒 About Me
+              About Me
             </h2>
 
             {loading ? (
-              <p className="text-gray-400 text-sm">Loading...</p>
+              <InlineSkeleton />
             ) : error ? (
               <p className="text-red-500 text-sm">{error}</p>
             ) : student ? (
@@ -200,110 +199,39 @@ export default function FamilyDashboardHome({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* My Child — one compact profile bar; full details in a pop-up */}
-        {student ? (
-          <ProfileBanner
-            compact
-            name={student.fullName}
-            lines={[
-              { label: "Admission No", value: student.admissionNumber },
-              {
-                label: "Grade",
-                value: `${student.grade}${student.section ? ` · ${student.section}` : ""}`,
-              },
-              { label: "Shadow Teacher", value: student.assignedTeacher?.name || "Unassigned" },
-              {
-                label: "Exam Eligibility",
-                value: ELIGIBILITY_LABEL[student.examEligibility || "pending"],
-              },
-            ]}
-            actions={
-              <button
-                type="button"
-                onClick={() => setShowProfile(true)}
-                className={BANNER_ACTION_CLASSES}
-              >
-                View Profile
-              </button>
-            }
-          />
-        ) : (
-          <div className="bg-white rounded-md shadow-sm p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">My Child</h2>
-            {loading ? (
-              <p className="text-gray-400 text-sm">Loading...</p>
-            ) : (
-              <p className="text-red-500 text-sm">{error || "No child linked to this account."}</p>
-            )}
-          </div>
-        )}
+        {/* Student info card */}
+        <div className="bg-white rounded-md shadow-sm p-6">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">
+            My Child
+          </h2>
+
+          {loading ? (
+            <InlineSkeleton />
+          ) : error ? (
+            <p className="text-red-500 text-sm">{error}</p>
+          ) : student ? (
+            <dl className="space-y-3 text-sm">
+              <Row label="Admission Number" value={student.admissionNumber} />
+              <Row label="Name" value={student.fullName} />
+              <Row label="Grade" value={student.grade} />
+              {student.section && <Row label="Section" value={student.section} />}
+              <Row label="Diagnosis" value={formatText(student.diagnosis)} />
+              <Row label="Communication" value={formatCommunication(student.communicationLevel)} />
+              <Row
+                label="Shadow Teacher"
+                value={student.assignedTeacher?.name || "Unassigned"}
+              />
+              <Row
+                label="Exam Eligibility"
+                value={ELIGIBILITY_LABEL[student.examEligibility || "pending"]}
+              />
+            </dl>
+          ) : null}
+        </div>
 
         <MiniCalendar today={today} />
       </div>
 
-      {student && (
-        <ProfileDetailsModal
-          open={showProfile}
-          onClose={() => setShowProfile(false)}
-          title="Child Profile"
-          sections={[
-            {
-              heading: "Student",
-              rows: [
-                { label: "Full Name", value: student.fullName, wide: true },
-                { label: "Admission No", value: student.admissionNumber },
-                { label: "Branch", value: student.branch },
-                { label: "Grade", value: student.grade },
-                { label: "Section", value: student.section },
-                {
-                  label: "Category",
-                  value:
-                    student.programCategory === "cambridge"
-                      ? "Cambridge"
-                      : student.programCategory === "national"
-                      ? "National"
-                      : "",
-                },
-                {
-                  label: "Date of Birth",
-                  value: student.dateOfBirth
-                    ? new Date(student.dateOfBirth).toLocaleDateString()
-                    : "",
-                },
-                { label: "Gender", value: student.gender, capitalize: true },
-                { label: "Diagnosis", value: student.diagnosis },
-                {
-                  label: "Communication",
-                  value: student.communicationLevel?.replace("-", " "),
-                  capitalize: true,
-                },
-                {
-                  label: "Exam Eligibility",
-                  value: ELIGIBILITY_LABEL[student.examEligibility || "pending"],
-                },
-              ],
-            },
-            {
-              heading: "Shadow Teacher",
-              rows: [
-                { label: "Name", value: student.assignedTeacher?.name || "Unassigned" },
-                { label: "Phone", value: student.assignedTeacher?.phone },
-                { label: "Email", value: student.assignedTeacher?.email, wide: true },
-              ],
-            },
-            {
-              heading: "Parent / Guardian",
-              rows: [
-                { label: "Name", value: student.parentFirstName },
-                { label: "Relationship", value: student.parentRelationship },
-                { label: "Phone", value: student.parentPhone },
-                { label: "Email", value: student.parentEmail },
-                { label: "Address", value: student.homeCity, wide: true },
-              ],
-            },
-          ]}
-        />
-      )}
     </>
   );
 }

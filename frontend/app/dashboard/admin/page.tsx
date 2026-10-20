@@ -7,6 +7,7 @@ import MiniCalendar from "@/components/MiniCalendar";
 import AdmitStudentModal from "@/components/AdmitStudentModal";
 
 import { API_BASE } from "@/lib/config";
+import { InlineSkeleton } from "@/components/Skeleton";
 interface Student {
   _id: string;
   fullName: string;
@@ -58,6 +59,7 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadDashboard();
   }, [loadDashboard]);
 
@@ -164,7 +166,7 @@ export default function AdminDashboardPage() {
               {loading ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-4 text-gray-400">
-                    Loading...
+                    <InlineSkeleton rows={3} />
                   </td>
                 </tr>
               ) : students.length === 0 ? (

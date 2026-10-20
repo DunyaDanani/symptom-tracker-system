@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import { BTN_SECONDARY } from "@/lib/ui";
 interface InboxMessage {
   _id: string;
   sender: { _id: string; name: string; role: string } | null;
@@ -127,7 +129,7 @@ export default function MessageInbox() {
     }
   };
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading...</p>;
+  if (loading) return <LoadingSkeleton />;
   if (error) return <p className="text-red-500 text-sm">{error}</p>;
   if (messages.length === 0) {
     return (
@@ -164,7 +166,7 @@ export default function MessageInbox() {
               onClick={() =>
                 openAuthenticatedFile(`${API_BASE}/messages/${m._id}/attachment`)
               }
-              className="text-xs text-blue-600 hover:underline mt-2 inline-block"
+              className={`${BTN_SECONDARY} mt-2`}
             >
               📎 {m.attachmentName || "Attachment"}
             </button>
@@ -218,7 +220,7 @@ export default function MessageInbox() {
               ) : (
                 <button
                   onClick={() => startReply(m)}
-                  className="text-xs font-medium text-blue-600 hover:underline"
+                  className={BTN_SECONDARY}
                 >
                   Reply
                 </button>

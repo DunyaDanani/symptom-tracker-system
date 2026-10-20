@@ -1593,7 +1593,7 @@ export const adminSetStudentFlag = async (req, res) => {
     const student = await Student.findByIdAndUpdate(
       studentId,
       { flagged: Boolean(flagged), flagNote: flagNote || "" },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!student) {
@@ -1751,7 +1751,7 @@ export const adminUpdateSymptomLog = async (req, res) => {
         academicYear: academicYear.trim(),
         term,
       },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     );
 
     if (!log) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BTN_SECONDARY } from "@/lib/ui";
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -34,17 +35,21 @@ export default function MiniCalendar({ today }: { today: Date }) {
     <div className="bg-white rounded-md shadow-sm p-6 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <button
+          type="button"
           onClick={goPrev}
-          className="text-sm text-gray-400 hover:text-gray-600"
+          className={BTN_SECONDARY}
+          aria-label="Previous month"
         >
-          Prev
+          ‹ Prev
         </button>
-        <p className="text-red-500 font-semibold">{monthLabel}</p>
+        <p className="text-blue-900 font-semibold">{monthLabel}</p>
         <button
+          type="button"
           onClick={goNext}
-          className="text-sm text-gray-400 hover:text-gray-600"
+          className={BTN_SECONDARY}
+          aria-label="Next month"
         >
-          Next
+          Next ›
         </button>
       </div>
 

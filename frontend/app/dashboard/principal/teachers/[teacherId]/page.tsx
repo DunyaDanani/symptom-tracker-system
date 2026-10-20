@@ -7,6 +7,8 @@ import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import { API_BASE } from "@/lib/config";
 import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
 import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import LoadingSkeleton from "@/components/Skeleton";
+import { formatText } from "@/lib/format";
 interface TeacherProfileData {
   _id: string;
   name: string;
@@ -67,7 +69,7 @@ export default function PrincipalTeacherProfilePage({
       breadcrumbLabels={teacher ? { [teacherId]: teacher.name } : undefined}
     >
       {loading ? (
-        <p className="text-gray-400 text-sm mt-2">Loading...</p>
+        <LoadingSkeleton className="mt-2" />
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : teacher ? (
@@ -78,7 +80,7 @@ export default function PrincipalTeacherProfilePage({
             lines={[
               { label: "Role", value: "Shadow Teacher" },
               { label: "Username", value: teacher.username },
-              { label: "Specialization", value: teacher.specialization },
+              { label: "Specialization", value: formatText(teacher.specialization) },
               {
                 label: "Experience",
                 value: `${teacher.experienceYears || 0} years`,
@@ -105,8 +107,8 @@ export default function PrincipalTeacherProfilePage({
                   { label: "Name", value: teacher.name, wide: true },
                   { label: "Username", value: teacher.username },
                   { label: "Age", value: teacher.age },
-                  { label: "Qualification", value: teacher.qualification },
-                  { label: "Specialization", value: teacher.specialization },
+                  { label: "Highest Qualification", value: formatText(teacher.qualification) },
+                  { label: "Specialization", value: formatText(teacher.specialization) },
                   {
                     label: "Experience",
                     value: `${teacher.experienceYears || 0} years`,

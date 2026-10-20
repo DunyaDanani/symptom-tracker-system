@@ -20,6 +20,12 @@ import {
 import FieldError from "@/components/FieldError";
 import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
 import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import LoadingSkeleton from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
+import { formatCommunication, formatText } from "@/lib/format";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
+import { BTN_PRIMARY } from "@/lib/ui";
+import { PhoneIcon, MailIcon } from "@/components/Icons";
 import StudentTeacherPanel, {
   type TeacherHistoryEntry,
 } from "@/components/StudentTeacherPanel";
@@ -198,6 +204,8 @@ export default function AdminStudentHistoryPage({
   // so one From/To control covers both).
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const symptomPager = usePager();
+  const emotionPager = usePager();
 
   // Flag state
   const [flagged, setFlagged] = useState(false);
@@ -324,6 +332,7 @@ export default function AdminStudentHistoryPage({
   // just saves a click on the common case.
   useEffect(() => {
     if (!currentTerm) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setNewSymptomAcademicYear((prev) => prev || currentTerm.academicYear);
     setNewSymptomTerm((prev) => prev || currentTerm.term);
     setNewEmotionAcademicYear((prev) => prev || currentTerm.academicYear);
@@ -408,6 +417,7 @@ export default function AdminStudentHistoryPage({
       const data = await res.json();
       if (data.success) {
         setProfileStatus("Profile updated.");
+        toast.success("Student profile updated");
         setEditingProfile(false);
         await loadStudent();
       } else {
@@ -465,6 +475,7 @@ export default function AdminStudentHistoryPage({
       const data = await res.json();
       if (data.success) {
         setSymptomStatus("Symptom log added.");
+        toast.success("Symptom log added");
         setNewSymptoms([]);
         setNewNotes("");
         await loadHistory();
@@ -510,6 +521,7 @@ export default function AdminStudentHistoryPage({
       const data = await res.json();
       if (data.success) {
         setEmotionStatus("Emotion check-in added.");
+        toast.success("Emotion check-in added");
         setNewChildEmoji("");
         setNewTeacherEmoji("");
         await loadHistory();
@@ -625,12 +637,14 @@ export default function AdminStudentHistoryPage({
     dateTo,
     (log) => log.createdAt
   );
+  const symptomPage = paginate(filteredSymptomLogs, symptomPager);
   const filteredEmotionCheckins = filterByDateRange(
     emotionCheckins,
     dateFrom,
     dateTo,
     (c) => c.createdAt
   );
+  const emotionPage = paginate(filteredEmotionCheckins, emotionPager);
   const clearDateFilter = () => {
     setDateFrom("");
     setDateTo("");
@@ -674,14 +688,14 @@ export default function AdminStudentHistoryPage({
       }
       breadcrumbMiddleCrumbs={middleCrumbs}
     >
-      <div className="flex items-center justify-between mt-2 mb-8">
+      <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold text-blue-900">
           Student History
         </h1>
         <Link
           href={`/dashboard/print-report/${studentId}`}
           target="_blank"
-          className="text-sm bg-blue-900 hover:bg-blue-800 text-white rounded-full px-4 py-1.5"
+          className={BTN_PRIMARY}
         >
           Print Report
         </Link>
@@ -752,10 +766,10 @@ export default function AdminStudentHistoryPage({
                     : "",
                 },
                 { label: "Gender", value: studentRecord.gender, capitalize: true },
-                { label: "Diagnosis", value: studentRecord.diagnosis },
+                { label: "Diagnosis", value: formatText(studentRecord.diagnosis) },
                 {
                   label: "Communication",
-                  value: studentRecord.communicationLevel?.replace("-", " "),
+                  value: formatCommunication(studentRecord.communicationLevel),
                   capitalize: true,
                 },
                 { label: "Additional Notes", value: studentRecord.additionalNotes, wide: true },
@@ -787,7 +801,7 @@ export default function AdminStudentHistoryPage({
       )}
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -1091,17 +1105,17 @@ export default function AdminStudentHistoryPage({
                     {studentRecord.assignedTeacher.phone && (
                       <a
                         href={`tel:${studentRecord.assignedTeacher.phone}`}
-                        className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
                       >
-                        📞 {studentRecord.assignedTeacher.phone}
+                        <PhoneIcon /> {studentRecord.assignedTeacher.phone}
                       </a>
                     )}
                     {studentRecord.assignedTeacher.email && (
                       <a
                         href={`mailto:${studentRecord.assignedTeacher.email}`}
-                        className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1.5 text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
                       >
-                        ✉️ {studentRecord.assignedTeacher.email}
+                        <MailIcon /> {studentRecord.assignedTeacher.email}
                       </a>
                     )}
                     {!studentRecord.assignedTeacher.phone &&
@@ -1229,7 +1243,7 @@ export default function AdminStudentHistoryPage({
                       : "No symptom logs in this date range."}
                   </p>
                 ) : (
-                  filteredSymptomLogs.map((log) =>
+                  symptomPage.items.map((log) =>
                     editingLogId === log._id ? (
                       <div key={log._id} className="px-6 py-4">
                         <div className="flex flex-col gap-1 mb-3">
@@ -1357,6 +1371,7 @@ export default function AdminStudentHistoryPage({
                   )
                 )}
               </div>
+              <Pagination page={symptomPage} pager={symptomPager} />
             </div>
           </div>
 
@@ -1460,7 +1475,7 @@ export default function AdminStudentHistoryPage({
                       : "No check-ins in this date range."}
                   </p>
                 ) : (
-                  filteredEmotionCheckins.map((c) =>
+                  emotionPage.items.map((c) =>
                     editingCheckinId === c._id ? (
                       <div key={c._id} className="px-6 py-4">
                         <p className="text-xs text-gray-500 mb-2">Child</p>
@@ -1559,7 +1574,7 @@ export default function AdminStudentHistoryPage({
                             {(c.childEmoji && EMOJI_ICON[c.childEmoji]) || "—"}{" "}
                             {(c.teacherEmoji && EMOJI_ICON[c.teacherEmoji]) || "—"}{" "}
                             <span className="text-sm text-gray-600 align-middle">
-                              ({c.compositeScore})
+                              (score {c.compositeScore} / 5)
                             </span>
                           </p>
                         </div>
@@ -1586,6 +1601,7 @@ export default function AdminStudentHistoryPage({
                   )
                 )}
               </div>
+              <Pagination page={emotionPage} pager={emotionPager} />
             </div>
           </div>
         </div>

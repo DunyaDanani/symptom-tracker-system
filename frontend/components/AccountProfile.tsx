@@ -12,6 +12,7 @@ import {
   FieldErrors,
 } from "@/lib/validation";
 import FieldError from "@/components/FieldError";
+import { toast } from "@/lib/toast";
 
 interface Me {
   _id: string;
@@ -82,6 +83,7 @@ export default function AccountProfile() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadMe();
   }, []);
 
@@ -102,6 +104,7 @@ export default function AccountProfile() {
       const data = await res.json();
       setUsernameStatus(data.message);
       if (data.success) {
+        toast.success("Username updated");
         localStorage.setItem("username", data.username);
         await loadMe();
       }
@@ -133,6 +136,7 @@ export default function AccountProfile() {
       const data = await res.json();
       setEmailStatus(data.message);
       if (data.success) {
+        toast.success("Recovery email saved");
         await loadMe();
       }
     } catch (err) {
@@ -166,6 +170,7 @@ export default function AccountProfile() {
       const data = await res.json();
       setPasswordStatus(data.message);
       if (data.success) {
+        toast.success("Password changed");
         setCurrentPassword("");
         setNewPassword("");
       }

@@ -5,6 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { openAuthenticatedFile } from "@/lib/fileAccess";
 
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface DoctorDoc {
   _id: string;
@@ -73,6 +74,7 @@ export default function AdminDocReviewsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     load(status, branch);
   }, [status, branch]);
 
@@ -106,7 +108,7 @@ export default function AdminDocReviewsPage() {
 
   return (
     <DashboardLayout>
-      <div className="flex items-center justify-between mt-2 mb-8 gap-3 flex-wrap">
+      <div className="flex items-center justify-between mb-8 gap-3 flex-wrap">
         <h1 className="text-2xl font-semibold text-blue-900">Doctor&apos;s Recommendation</h1>
         <div className="flex gap-2 items-center flex-wrap">
           <select
@@ -147,7 +149,7 @@ export default function AdminDocReviewsPage() {
       </div>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : documents.length === 0 ? (
         <div className="bg-white rounded-md shadow-sm p-6 text-sm text-gray-400">
           {status === "pending"

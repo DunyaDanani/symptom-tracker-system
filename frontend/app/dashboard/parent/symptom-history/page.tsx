@@ -6,6 +6,8 @@ import SecureContentGate from "@/components/SecureContentGate";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
 
 interface MedicationEntry {
   name: string;
@@ -29,6 +31,7 @@ function SymptomHistoryContent() {
   const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const symptomPager = usePager();
 
   useEffect(() => {
     const load = async () => {
@@ -67,7 +70,7 @@ function SymptomHistoryContent() {
   }, []);
 
   if (loading) {
-    return <p className="text-gray-400 text-sm">Loading...</p>;
+    return <LoadingSkeleton />;
   }
 
   if (error) {
@@ -80,6 +83,7 @@ function SymptomHistoryContent() {
     dateTo,
     (log) => log.createdAt
   );
+  const symptomPage = paginate(filteredLogs, symptomPager);
 
   return (
     <div className="bg-white rounded-md shadow-sm overflow-hidden">
@@ -114,7 +118,7 @@ function SymptomHistoryContent() {
               </td>
             </tr>
           ) : (
-            filteredLogs.map((log) => (
+            symptomPage.items.map((log) => (
               <tr key={log._id} className="border-b border-gray-50">
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap align-top">
                   {new Date(log.createdAt).toLocaleString()}
@@ -156,6 +160,7 @@ function SymptomHistoryContent() {
           )}
         </tbody>
       </table>
+        <Pagination page={symptomPage} pager={symptomPager} />
     </div>
   );
 }
@@ -163,7 +168,7 @@ function SymptomHistoryContent() {
 export default function ParentSymptomHistoryPage() {
   return (
     <FamilyDashboardLayout role="parent">
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Symptom History
       </h1>
 

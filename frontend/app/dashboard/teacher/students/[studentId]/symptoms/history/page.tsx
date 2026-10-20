@@ -6,6 +6,8 @@ import SubpageHeader from "@/components/SubpageHeader";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
 
 interface StudentSummary {
   _id: string;
@@ -72,6 +74,7 @@ export default function TeacherSymptomHistoryPage({
   const [savingEdit, setSavingEdit] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const symptomPager = usePager();
 
   const authHeaders = () => {
     const token = localStorage.getItem("token");
@@ -86,6 +89,7 @@ export default function TeacherSymptomHistoryPage({
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split(".")[1]));
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
         setCurrentUserId(payload.id || null);
       } catch (err) {
         console.error("Failed to decode token", err);
@@ -209,6 +213,7 @@ export default function TeacherSymptomHistoryPage({
     dateTo,
     (log) => log.createdAt
   );
+  const symptomPage = paginate(filteredHistory, symptomPager);
 
   return (
     <TeacherDashboardLayout
@@ -219,7 +224,7 @@ export default function TeacherSymptomHistoryPage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -274,7 +279,7 @@ export default function TeacherSymptomHistoryPage({
                     </td>
                   </tr>
                 ) : (
-                  filteredHistory.map((log) =>
+                  symptomPage.items.map((log) =>
                     editingLogId === log._id ? (
                       <tr key={log._id} className="border-b border-gray-50">
                         <td colSpan={4} className="px-4 py-4">
@@ -382,6 +387,7 @@ export default function TeacherSymptomHistoryPage({
                 )}
               </tbody>
             </table>
+        <Pagination page={symptomPage} pager={symptomPager} />
           </div>
         </>
       )}

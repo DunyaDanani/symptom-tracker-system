@@ -5,6 +5,9 @@ import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import DateRangeFilter from "@/components/DateRangeFilter";
 import { filterByDateRange } from "@/lib/dateRangeFilter";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
+import ScoreNote from "@/components/ScoreNote";
+import Pagination, { usePager, paginate } from "@/components/Pagination";
 
 interface SymptomLogEntry {
   _id: string;
@@ -63,6 +66,8 @@ export default function PrincipalStudentHistoryPage({
   const [error, setError] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const symptomPager = usePager();
+  const emotionPager = usePager();
 
   useEffect(() => {
     const load = async () => {
@@ -96,21 +101,23 @@ export default function PrincipalStudentHistoryPage({
     dateTo,
     (log) => log.createdAt
   );
+  const symptomPage = paginate(filteredSymptomLogs, symptomPager);
   const filteredEmotionCheckins = filterByDateRange(
     emotionCheckins,
     dateFrom,
     dateTo,
     (c) => c.createdAt
   );
+  const emotionPage = paginate(filteredEmotionCheckins, emotionPager);
 
   return (
     <PrincipalDashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-8">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-8">
         Student History
       </h1>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (
@@ -160,7 +167,7 @@ export default function PrincipalStudentHistoryPage({
                     </td>
                   </tr>
                 ) : (
-                  filteredSymptomLogs.map((log) => (
+                  symptomPage.items.map((log) => (
                     <tr key={log._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(log.createdAt).toLocaleString()}
@@ -186,6 +193,7 @@ export default function PrincipalStudentHistoryPage({
                 )}
               </tbody>
             </table>
+        <Pagination page={symptomPage} pager={symptomPager} />
           </div>
 
           <div className="bg-white rounded-md shadow-sm overflow-hidden">
@@ -204,8 +212,8 @@ export default function PrincipalStudentHistoryPage({
                   <th className="px-4 py-3 font-semibold text-gray-700">
                     Teacher
                   </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    Score
+                  <th className="px-4 py-3 font-semibold text-gray-700" title="1 = very sad, 5 = very happy">
+                    Score (1–5)
                   </th>
                 </tr>
               </thead>
@@ -219,7 +227,7 @@ export default function PrincipalStudentHistoryPage({
                     </td>
                   </tr>
                 ) : (
-                  filteredEmotionCheckins.map((c) => (
+                  emotionPage.items.map((c) => (
                     <tr key={c._id} className="border-b border-gray-50">
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                         {new Date(c.createdAt).toLocaleString()}
@@ -251,6 +259,8 @@ export default function PrincipalStudentHistoryPage({
                 )}
               </tbody>
             </table>
+        <Pagination page={emotionPage} pager={emotionPager} />
+              <ScoreNote className="px-4 py-3 border-t border-gray-50" />
           </div>
         </div>
         </>

@@ -12,6 +12,7 @@ import {
   errorBorder,
 } from "@/lib/validation";
 import FieldError from "@/components/FieldError";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface StudentSummary {
   _id: string;
@@ -174,6 +175,7 @@ export default function TeacherUploadModulesWorkspacePage({
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadStudent();
     loadResources();
 
@@ -404,7 +406,7 @@ export default function TeacherUploadModulesWorkspacePage({
           : undefined
       }
     >
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">Modules</h1>
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">Modules</h1>
       {student && (
         <p className="text-sm text-gray-500 mb-6">
           {student.fullName} · {student.grade}
@@ -430,7 +432,7 @@ export default function TeacherUploadModulesWorkspacePage({
       </div>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : (

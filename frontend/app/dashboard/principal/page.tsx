@@ -6,6 +6,7 @@ import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import MiniCalendar from "@/components/MiniCalendar";
 
 import { API_BASE } from "@/lib/config";
+import { InlineSkeleton } from "@/components/Skeleton";
 interface Stats {
   totalStudents: number;
   shadowTeacherCount: number;
@@ -33,6 +34,7 @@ export default function PrincipalDashboardPage() {
 
   useEffect(() => {
     const storedBranch = localStorage.getItem("branch");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     if (storedBranch) setBranch(storedBranch);
   }, []);
 
@@ -128,7 +130,7 @@ export default function PrincipalDashboardPage() {
           {error ? (
             <p className="px-6 pb-6 text-red-500 text-sm">{error}</p>
           ) : loading ? (
-            <p className="px-6 pb-6 text-gray-400 text-sm">Loading...</p>
+            <InlineSkeleton className="px-6 pb-6" />
           ) : attention.length === 0 ? (
             <p className="px-6 pb-6 text-gray-400 text-sm">
               No students currently need attention.

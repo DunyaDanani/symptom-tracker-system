@@ -10,6 +10,8 @@ import {
   FieldErrors,
 } from "@/lib/validation";
 import FieldError from "@/components/FieldError";
+import { InlineSkeleton } from "@/components/Skeleton";
+import { toast } from "@/lib/toast";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -57,6 +59,7 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     setCurrentRole(localStorage.getItem("role"));
 
     // The token isn't encrypted, just signed — decode the payload to read
@@ -92,6 +95,7 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: initial load / sync from browser storage or loaded data
     loadNotices();
   }, []);
 
@@ -120,6 +124,7 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
         setTitle("");
         setBody("");
         setSuccessMsg("Notice posted successfully");
+        toast.success("Notice posted");
         setNotices((prev) => [data.notice, ...prev]);
         setTimeout(() => setSuccessMsg(""), 3000);
       } else {
@@ -223,7 +228,7 @@ export default function NoticeBoard({ canPost }: { canPost: boolean }) {
         </h2>
 
         {loading ? (
-          <p className="text-gray-400 text-sm">Loading...</p>
+          <InlineSkeleton />
         ) : error ? (
           <p className="text-red-500 text-sm">{error}</p>
         ) : notices.length === 0 ? (

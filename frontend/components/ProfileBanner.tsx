@@ -6,8 +6,8 @@ import { ReactNode } from "react";
 // Profile") sit in the top-right corner.
 //
 // `compact` is for a half-width grid cell (e.g. beside the dashboard
-// calendar): the content stacks and is centred so it fills the cell's
-// height evenly instead of leaving empty bands above and below.
+// calendar): same side-by-side layout, slightly smaller avatar, and it
+// stretches to the cell's height with the content vertically centred.
 
 export interface ProfileBannerLine {
   label: string;
@@ -34,9 +34,7 @@ export default function ProfileBanner({
   );
 
   const details = (
-    <dl
-      className={`mt-2 space-y-0.5 text-sm text-white/95 ${compact ? "text-center" : ""}`}
-    >
+    <dl className="mt-2 space-y-0.5 text-sm text-white/95">
       {visibleLines.map((l) => (
         <div key={l.label}>
           <dt className="inline">{l.label}</dt>
@@ -53,29 +51,11 @@ export default function ProfileBanner({
     </div>
   ) : null;
 
-  if (compact) {
-    return (
-      <div
-        className={`relative h-full bg-[#5b96d5] rounded-md shadow-sm px-6 py-8 flex flex-col items-center justify-center text-white ${className}`}
-      >
-        <PersonAvatar size="w-28 h-28" />
-        <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-          <h2 className="text-2xl font-normal leading-tight text-center break-words">
-            {name}
-          </h2>
-          {badges}
-        </div>
-        {visibleLines.length > 0 && details}
-        {actionsBlock && <div className="mt-4 sm:mt-0">{actionsBlock}</div>}
-      </div>
-    );
-  }
-
   return (
     <div
-      className={`relative bg-[#5b96d5] rounded-md shadow-sm px-6 py-6 sm:px-8 flex flex-col sm:flex-row items-center gap-6 text-white ${className}`}
+      className={`relative bg-[#5b96d5] rounded-md shadow-sm px-6 py-6 sm:px-8 flex flex-col sm:flex-row items-center gap-6 text-white ${compact ? "h-full" : ""} ${className}`}
     >
-      <PersonAvatar size="w-32 h-32" />
+      <PersonAvatar size={compact ? "w-28 h-28" : "w-32 h-32"} />
 
       <div
         className={`flex-1 min-w-0 text-center sm:text-left ${actions ? "sm:pr-40" : ""}`}

@@ -6,6 +6,9 @@ import PrincipalDashboardLayout from "@/components/PrincipalDashboardLayout";
 import { API_BASE } from "@/lib/config";
 import ProfileBanner, { BANNER_ACTION_CLASSES } from "@/components/ProfileBanner";
 import ProfileDetailsModal from "@/components/ProfileDetailsModal";
+import LoadingSkeleton from "@/components/Skeleton";
+import { formatCommunication, formatText } from "@/lib/format";
+import { PhoneIcon, MailIcon } from "@/components/Icons";
 
 type EligibilityStatus = "pending" | "eligible" | "not_eligible";
 
@@ -92,7 +95,7 @@ export default function PrincipalStudentProfilePage({
       }
     >
       {loading ? (
-        <p className="text-gray-400 text-sm mt-2">Loading...</p>
+        <LoadingSkeleton className="mt-2" />
       ) : error ? (
         <p className="text-red-500 text-sm mt-2">{error}</p>
       ) : student ? (
@@ -104,7 +107,7 @@ export default function PrincipalStudentProfilePage({
               { label: "Admission No", value: student.admissionNumber },
               { label: "Grade", value: student.grade },
               { label: "Section", value: student.section },
-              { label: "Diagnosis", value: student.diagnosis },
+              { label: "Diagnosis", value: formatText(student.diagnosis) },
             ]}
             badges={
               <>
@@ -143,10 +146,10 @@ export default function PrincipalStudentProfilePage({
                   { label: "Admission No", value: student.admissionNumber },
                   { label: "Grade", value: student.grade },
                   { label: "Section", value: student.section },
-                  { label: "Diagnosis", value: student.diagnosis },
+                  { label: "Diagnosis", value: formatText(student.diagnosis) },
                   {
                     label: "Communication",
-                    value: student.communicationLevel?.replace("-", " "),
+                    value: formatCommunication(student.communicationLevel),
                     capitalize: true,
                   },
                   {
@@ -185,17 +188,17 @@ export default function PrincipalStudentProfilePage({
                     {student.assignedTeacher.phone && (
                       <a
                         href={`tel:${student.assignedTeacher.phone}`}
-                        className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1.5 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium"
                       >
-                        📞 {student.assignedTeacher.phone}
+                        <PhoneIcon /> {student.assignedTeacher.phone}
                       </a>
                     )}
                     {student.assignedTeacher.email && (
                       <a
                         href={`mailto:${student.assignedTeacher.email}`}
-                        className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
+                        className="inline-flex items-center gap-1.5 text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-3 py-1.5 rounded-full font-medium"
                       >
-                        ✉️ {student.assignedTeacher.email}
+                        <MailIcon /> {student.assignedTeacher.email}
                       </a>
                     )}
                     {!student.assignedTeacher.phone &&

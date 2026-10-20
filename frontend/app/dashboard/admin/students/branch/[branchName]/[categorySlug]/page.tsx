@@ -9,6 +9,7 @@ import {
   UNGROUPED_CATEGORY,
 } from "@/lib/gradeTaxonomy";
 import { API_BASE } from "@/lib/config";
+import LoadingSkeleton from "@/components/Skeleton";
 
 interface Student {
   _id: string;
@@ -82,7 +83,7 @@ export default function AdminBranchCategoryPage({
 
   return (
     <DashboardLayout>
-      <h1 className="text-2xl font-semibold text-blue-900 mt-2 mb-1">
+      <h1 className="text-2xl font-semibold text-blue-900 mb-1">
         {category.label}
       </h1>
       <p className="text-sm text-gray-500 mb-8">
@@ -90,7 +91,7 @@ export default function AdminBranchCategoryPage({
       </p>
 
       {loading ? (
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <LoadingSkeleton />
       ) : error ? (
         <p className="text-red-500 text-sm">{error}</p>
       ) : category.slug === UNGROUPED_CATEGORY.slug ? (
